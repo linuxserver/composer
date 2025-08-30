@@ -1,0 +1,181 @@
+.workspace {
+  flex-grow: 1;
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+  background-color: #282c34;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  --connection-stroke-color: #a0aec0;
+}
+
+.workspace:active {
+    cursor: grabbing;
+}
+
+.workspace-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+
+.workspace-item {
+  position: absolute;
+  border: 1px solid #718096;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  display: flex;
+  z-index: 1;
+  cursor: default;
+}
+
+.resize-handle {
+  position: absolute;
+  bottom: -5px;
+  right: -5px;
+  width: 10px;
+  height: 10px;
+  background-color: #cbd5e0;
+  border: 1px solid #a0aec0;
+  cursor: nwse-resize;
+  border-radius: 50%;
+  z-index: 2;
+}
+
+.drag-ghost {
+  position: absolute;
+  z-index: 1000;
+  opacity: 0.7;
+  border: 2px dashed #63b3ed;
+  border-radius: 8px;
+  pointer-events: none;
+}
+
+.connections-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.connection-group {
+    pointer-events: all;
+    cursor: pointer;
+}
+
+.connection-path {
+  stroke: var(--connection-stroke-color);
+  stroke-width: 2;
+  fill: none;
+  transition: stroke 0.2s ease-in-out;
+}
+
+.connection-path.selected {
+  stroke: #63b3ed;
+  stroke-width: 3;
+}
+
+.connection-path-interactive {
+  stroke: transparent;
+  stroke-width: 10;
+  fill: none;
+}
+
+.linking-path {
+  stroke: #63b3ed;
+  stroke-width: 2;
+  stroke-dasharray: 5, 5;
+  fill: none;
+}
+
+.workspace-buttons-top-right {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 10;
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+}
+
+.workspace-buttons-bottom-right {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  z-index: 10;
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+}
+
+.workspace-button {
+  width: 50px;
+  height: 50px;
+  background-color: #4a5568;
+  border: 1px solid #718096;
+  border-radius: 25px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  transition: background-color 0.2s ease;
+}
+
+.workspace-button img {
+  width: 24px;
+  height: 24px;
+}
+
+.workspace-button[title*="Clear"]:hover {
+  background-color: #E53E3E;
+}
+
+.workspace-button[title*="Paint"]:hover {
+  background-color: #63b3ed;
+}
+
+.workspace-button[title*="Compose"]:hover {
+  background-color: #0db7ed;
+}
+
+.color-picker-container {
+  position: fixed;
+  display: flex;
+  flex-wrap: wrap;
+  width: 184px;
+  background-color: #2d3748;
+  border: 1px solid #718096;
+  border-radius: 8px;
+  padding: 8px;
+  z-index: 20;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+}
+
+.color-picker-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  margin: 4px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color 0.2s ease;
+}
+
+.color-picker-swatch:hover {
+  border-color: white;
+}
+
+.paint-ghost {
+  position: absolute;
+  z-index: 1000;
+  opacity: 0.7;
+  border-radius: 8px;
+  pointer-events: none;
+}

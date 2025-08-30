@@ -1,0 +1,42 @@
+:root {
+  --font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  --font-synthesis: none;
+  --text-rendering: optimizeLegibility;
+  --webkit-font-smoothing: antialiased;
+  --moz-osx-font-smoothing: grayscale;
+  --webkit-text-size-adjust: 100%;
+  --bg-color: #1a1a1a; 
+  --sidebar-bg: #242424;
+  --workspace-bg: #1e1e1e;
+  --item-bg: #3c3c3c;
+  --item-border: #6a6a6a;
+  --text-color: rgba(255, 255, 255, 0.87);
+  --accent-color-blue: #646cff;
+  --accent-color-green: #42b883;
+  --accent-color-orange: #ff7f50;
+  --grid-color: #313131;
+  --connector-color: #ffffff;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-family);
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  overflow: hidden;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #718096;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0;
+}
