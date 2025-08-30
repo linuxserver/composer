@@ -43,7 +43,7 @@ const Sidebar = ({ onDragStartItem, itemDefinitions, isOpen, onToggleLsioModal, 
   return (
     <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
       <div className="sidebar-header">
-        <img src="/lsio.svg" alt="LSIO Logo" />
+        <img src="lsio.svg" alt="LSIO Logo" />
         <h1>Composer</h1>
       </div>
       

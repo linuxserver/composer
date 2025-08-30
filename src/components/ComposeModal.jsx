@@ -37,7 +37,7 @@ const ComposeModal = ({ isOpen, onClose, composeFileContent }) => {
       <div className="modal-content large" onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-title-container">
-            <img src="/docker-logo.svg" className="modal-header-icon" alt="Docker Logo" />
+            <img src="docker-logo.svg" className="modal-header-icon" alt="Docker Logo" />
             <h2>Docker Compose File</h2>
           </div>
           <span className="modal-close" onMouseDown={onClose}>&times;</span>

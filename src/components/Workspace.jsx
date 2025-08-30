@@ -441,15 +441,15 @@ const Workspace = forwardRef(({
       </div>
       <div className="workspace-buttons-top-right">
         <div className="workspace-button" onMouseDown={onGenerateComposeRequest} title="Generate Docker Compose">
-            <img src="/docker-logo.svg" alt="Generate Docker Compose" />
+            <img src="docker-logo.svg" alt="Generate Docker Compose" />
         </div>
       </div>
       <div className="workspace-buttons-bottom-right">
          <div className="workspace-button" onMouseDown={handlePaintButtonClick} title="Paint Group Box">
-            <img src="/paint.svg" alt="Paint Box" />
+            <img src="paint.svg" alt="Paint Box" />
         </div>
         <div className="workspace-button" onMouseDown={onClearCanvasRequest} title="Clear Canvas">
-            <img src="/clear.svg" alt="Clear Canvas" />
+            <img src="clear.svg" alt="Clear Canvas" />
         </div>
       </div>
       {isColorPickerOpen && <ColorPicker onSelectColor={handleColorSelected} position={colorPickerPosition} />}

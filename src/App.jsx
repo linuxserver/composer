@@ -13,7 +13,7 @@ import { itemDefinition as ColorBoxDefinition, ItemComponent as ColorBoxItemComp
 
 const itemModules = import.meta.glob('./components/items/*.jsx', { eager: true });
 const GRID_SIZE = 20;
-const API_URL = '/api-data.json';
+const API_URL = 'api-data.json';
 const LOCAL_STORAGE_KEY = 'lsio-composer-session';
 
 const getProviderOutputValue = (item, itemDef) => {

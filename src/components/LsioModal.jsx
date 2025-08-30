@@ -39,7 +39,7 @@ const LsioModal = ({ isOpen, onClose, onDragStartItem, lsioApps }) => {
             onDragStart={(e) => onDragStartItem(e, app)}
             title={`Drag to add ${app.name}`}
           >
-            <img src={app.icon || '/docker-logo.svg'} alt={`${app.name} logo`} />
+            <img src={app.icon || 'docker-logo.svg'} alt={`${app.name} logo`} />
             <span>{app.name}</span>
           </div>
         ))}
