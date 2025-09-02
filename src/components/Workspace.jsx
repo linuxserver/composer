@@ -2,55 +2,9 @@ import React, { useState, forwardRef, useMemo, useCallback, useEffect } from 're
 import WorkspaceItem from './WorkspaceItem';
 import ColorPicker from './ColorPicker';
 import '../styles/Workspace.css';
+import { getDynamicDefinition } from './WorkspaceItem'; // Import the corrected, shared function
 
 const GRID_SIZE = 20;
-
-const getDynamicDefinition = (item, staticDef) => {
-    if (!item || !staticDef) return null;
-
-    if (item.type === 'EnvVarOverride' && item.data?.key) {
-        return {
-            ...staticDef,
-            outputs: [{
-                id: `env_out:${item.data.key}`, name: item.data.key, type: 'env_value', multiple: true, color: '#f6ad55'
-            }]
-        };
-    }
-
-    const isContainer = staticDef.inputs.some(i => i.id === 'depends_on');
-    if (!isContainer) {
-        return staticDef;
-    }
-    
-    const serviceData = item.data;
-    const dynamicInputs = [];
-
-    (serviceData.volumes || []).forEach((volumeString) => {
-        const parts = volumeString.split(':');
-        const target = parts.length > 1 ? parts[1] : '';
-        if (target) {
-            dynamicInputs.push({ id: `volume:${target}`, name: `vol: ${target.length > 12 ? `...${target.slice(-9)}` : target}`, compatibleTypes: ['mntpath', 'volume'], multiple: false, color: '#f6e05e' });
-        }
-    });
-    
-    if (Array.isArray(serviceData.environment)) {
-        serviceData.environment.forEach((env) => {
-            if (env.key) {
-                dynamicInputs.push({ id: `env:${env.key}`, name: env.key, compatibleTypes: ['mntpath', 'env_value'], multiple: false, color: '#f6ad55' });
-            }
-        });
-    }
-    
-    const combinedInputs = [...staticDef.inputs];
-    const staticInputIds = new Set(staticDef.inputs.map(i => i.id));
-    dynamicInputs.forEach(dInput => {
-      if (!staticInputIds.has(dInput.id)) {
-        combinedInputs.push(dInput);
-      }
-    });
-
-    return { ...staticDef, inputs: combinedInputs };
-};
 
 const calculatePath = (startPos, endPos) => {
   const dx = endPos.x - startPos.x;

@@ -18,17 +18,21 @@ export const getDynamicDefinition = (item, staticDefinition) => {
     }
     
     const isContainer = staticDefinition.inputs.some(i => i.id === 'depends_on');
-    if (!isContainer) {
+    const isSwag = item.type === 'DuckdnsSwag';
+
+    if (!isContainer && !isSwag) {
         return staticDefinition;
     }
 
     const serviceData = item.data;
     const dynamicInputs = [];
+    const allowedEnvs = isSwag ? ['PUID', 'PGID', 'TZ'] : null;
+    const allowedVols = isSwag ? ['/config'] : null;
 
     (serviceData.volumes || []).forEach((volumeString) => {
         const parts = volumeString.split(':');
         const target = parts.length > 1 ? parts[1] : '';
-        if (target) {
+        if (target && (!allowedVols || allowedVols.includes(target))) {
             dynamicInputs.push({
                 id: `volume:${target}`,
                 name: `vol: ${target.length > 12 ? `...${target.slice(-9)}` : target}`,
@@ -41,7 +45,7 @@ export const getDynamicDefinition = (item, staticDefinition) => {
 
     if (Array.isArray(serviceData.environment)) {
         serviceData.environment.forEach((env) => {
-            if (env.key) {
+            if (env.key && (!allowedEnvs || allowedEnvs.includes(env.key))) {
                 dynamicInputs.push({ id: `env:${env.key}`, name: env.key, compatibleTypes: ['mntpath', 'env_value'], multiple: false, color: '#f6ad55' });
             }
         });
@@ -204,7 +208,11 @@ const WorkspaceItem = ({
   }
 
   const isContainer = item.definition?.inputs.some(i => i.id === 'depends_on');
-  const componentTypeKey = isContainer ? 'Container' : item.type;
+  
+  const componentTypeKey = itemComponents[item.type]
+    ? item.type
+    : isContainer ? 'Container' : item.type;
+
   const ItemContentComponent = itemComponents[componentTypeKey]?.ItemComponent;
   const staticDefinition = item.definition;
 

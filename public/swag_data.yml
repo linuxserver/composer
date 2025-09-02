@@ -1,0 +1,674 @@
+swag_configs:
+  - name: actual-server
+    port: 5006
+  - name: adminer
+    port: 8080
+  - name: adminmongo
+    port: 1234
+  - name: airsonic
+    port: 4040
+  - name: apprise-api
+    port: 8000
+  - name: archisteamfarm
+    port: 1242
+  - name: atuin
+    port: 8888
+  - name: audiobookshelf
+    port: 80
+  - name: autobrr
+    port: 7474
+  - name: beets
+    port: 8337
+  - name: booksonic
+    port: 4040
+  - name: bookstack
+    port: 80
+  - name: castopod
+    port: 8000
+  - name: changedetection
+    port: 5000
+  - name: chevereto
+    port: 80
+  - name: chronograf
+    port: 8888
+  - name: codimd
+    port: 3000
+  - name: commento
+    port: 8080
+  - name: couchpotato
+    port: 5050
+  - name: crowdsec
+    port: 8080
+  - name: cryptgeon
+    port: 8000
+  - name: dashy
+    port: 8080
+  - name: deluge
+    port: 8112
+  - name: dillinger
+    port: 8080
+  - name: discount-bandit
+    port: 80
+  - name: dockge
+    port: 5001
+  - name: documentserver
+    port: 80
+  - name: dokuwiki
+    port: 80
+  - name: domoticz
+    port: 8080
+  - name: dozzle
+    port: 8080
+  - name: drone
+    port: 80
+  - name: dsmrreader
+    port: 80
+  - name: duplicacy
+    port: 3875
+  - name: duplicati
+    port: 8200
+  - name: embystat
+    port: 6555
+  - name: esphome
+    port: 6052
+  - name: fenrus
+    port: 3000
+  - name: firefly
+    port: 8080
+  - name: firefox
+    port: 3000
+  - name: flaresolverr
+    port: 8191
+  - name: flexget
+    port: 5050
+  - name: flood
+    port: 3000
+  - name: get_iplayer
+    port: 1935
+  - name: ghost
+    port: 2368
+  - name: glances
+    port: 61208
+  - name: gotify
+    port: 80
+  - name: grav
+    port: 80
+  - name: graylog
+    port: 9000
+  - name: hass-configurator
+    port: 3218
+  - name: headphones
+    port: 8181
+  - name: healthchecks
+    port: 8000
+  - name: hedgedoc
+    port: 3000
+  - name: homarr
+    port: 7575
+  - name: homebridge
+    port: 8581
+  - name: homepage
+    port: 3000
+  - name: homer
+    port: 8080
+  - name: huginn
+    port: 3000
+  - name: iplayarr
+    port: 4404
+  - name: it-tools
+    port: 80
+  - name: jellyseerr
+    port: 5055
+  - name: jfa-go
+    port: 8056
+  - name: joplin
+    port: 22300
+  - name: kopia
+    port: 51515
+  - name: lazylibrarian
+    port: 5299
+  - name: leantime
+    port: 80
+  - name: libreddit
+    port: 8080
+  - name: librespeed
+    port: 80
+  - name: linkace
+    port: 80
+  - name: lldap
+    port: 17170
+  - name: lubelogger
+    port: 8080
+  - name: lychee
+    port: 80
+  - name: mailu
+    port: 80
+  - name: maintainerr
+    port: 6246
+  - name: mastodon
+    port: 80
+  - name: matomo
+    port: 80
+  - name: mattermost
+    port: 8065
+  - name: mealie
+    port: 9000
+  - name: medusa
+    port: 8081
+  - name: metube
+    port: 8081
+  - name: miniflux
+    port: 8080
+  - name: monitorr
+    port: 80
+  - name: mstream
+    port: 3000
+  - name: mylar
+    port: 8090
+  - name: n8n
+    port: 5678
+  - name: navidrome
+    port: 4533
+  - name: netboot
+    port: 3000
+  - name: netbox
+    port: 8000
+  - name: netdata
+    port: 19999
+  - name: nocodb
+    port: 8080
+  - name: ntfy
+    port: 80
+  - name: onetimesecret
+    port: 3000
+  - name: oogway
+    port: 8080
+  - name: openhab
+    port: 8080
+  - name: open-webui
+    port: 8080
+  - name: osticket
+    port: 80
+  - name: papermerge
+    port: 8000
+  - name: partdb
+    port: 80
+  - name: petio
+    port: 7777
+  - name: phoneinfoga
+    port: 5000
+  - name: photoprism
+    port: 2342
+  - name: phpmyadmin
+    port: 80
+  - name: pinry
+    port: 80
+  - name: piwigo
+    port: 80
+  - name: pixelfed
+    port: 80
+  - name: planka
+    port: 1337
+  - name: podgrab
+    port: 8080
+  - name: privatebin
+    port: 8080
+  - name: pwndrop
+    port: 8080
+  - name: pyload
+    port: 8000
+  - name: qbit-manage
+    port: 8080
+  - name: quassel-web
+    port: 64080
+  - name: qui
+    port: 7476
+  - name: rallly
+    port: 3000
+  - name: raneto
+    port: 3000
+  - name: requestrr
+    port: 4545
+  - name: resilio-sync
+    port: 8888
+  - name: romm
+    port: 8080
+  - name: scrutiny
+    port: 8080
+  - name: shlink
+    port: 8080
+  - name: sickchill
+    port: 8081
+  - name: sickrage
+    port: 8081
+  - name: skyhook
+    port: 8080
+  - name: smokeping
+    port: 80
+  - name: speedtest-tracker
+    port: 80
+  - name: spoolman
+    port: 8000
+  - name: statping
+    port: 8080
+  - name: stirling-pdf
+    port: 8080
+  - name: storm
+    port: 8221
+  - name: tasmobackup
+    port: 80
+  - name: tdarr
+    port: 8265
+  - name: thelounge
+    port: 9000
+  - name: viewtube
+    port: 8066
+  - name: wallabag
+    port: 80
+  - name: webtop
+    port: 3000
+  - name: wizarr
+    port: 5690
+  - name: wordpress
+    port: 80
+  - name: wrapperr
+    port: 8282
+  - name: yacht
+    port: 8000
+  - name: yourls
+    port: 80
+  - name: your-spotify-api
+    port: 8080
+  - name: your-spotify
+    port: 3000
+  - name: youtube-dl-server
+    port: 8080
+  - name: yt-dlp-web
+    port: 3000
+  - name: zigbee2mqtt
+    port: 8080
+  - name: znc
+    port: 6501
+  - name: zwavejs2mqtt
+    port: 8091
+  - name: zwave-js-ui
+    port: 8091
+  - name: budge
+    port: 443
+    https: true
+  - name: collabora
+    port: 9980
+    https: true
+  - name: frigate
+    port: 8971
+    https: true
+  - name: heimdall
+    port: 443
+    https: true
+  - name: linkstack
+    port: 443
+    https: true
+  - name: monica
+    port: 443
+    https: true
+  - name: pydio
+    port: 443
+    https: true
+  - name: unifi-controller
+    port: 8443
+    https: true
+    buffering_off: true
+  - name: unifi-network-application
+    port: 8443
+    https: true
+    buffering_off: true
+  - name: warpgate
+    port: 8888
+    https: true
+  - name: babybuddy
+    port: 8000
+    api: true
+  - name: bazarr
+    port: 6767
+    api: true
+  - name: beszel
+    port: 8090
+    api: true
+  - name: cadvisor
+    port: 8080
+    api: true
+  - name: ddns-updater
+    port: 8000
+    api: true
+  - name: grafana
+    port: 3000
+    api: true
+  - name: grocy
+    port: 80
+    api: true
+  - name: hoarder
+    port: 3000
+    api: true
+  - name: homebox
+    port: 7745
+    api: true
+  - name: immich
+    port: 2283
+    api: true
+  - name: immich_server
+    port: 2283
+    api: true
+  - name: influxdb
+    port: 8086
+    api: true
+  - name: kavita
+    port: 5000
+    api: true
+  - name: kimai
+    port: 80
+    api: true
+  - name: komga
+    port: 25600
+    api: true
+  - name: lidarr
+    port: 8686
+    api: true
+  - name: linkwarden
+    port: 3000
+    api: true
+  - name: overseerr
+    port: 5055
+    api: true
+  - name: paperless
+    port: 8000
+    api: true
+  - name: pingvin-share
+    port: 3000
+    api: true
+  - name: radarr
+    port: 7878
+    api: true
+  - name: readarr
+    port: 8787
+    api: true
+  - name: sabnzbd
+    port: 8080
+    api: true
+  - name: sonarr
+    port: 8989
+    api: true
+  - name: watcharr
+    port: 3080
+    api: true
+  - name: whisparr
+    port: 6969
+    api: true
+  - name: boinc
+    port: 8080
+    buffering_off: true
+  - name: cloudbeaver
+    port: 8978
+    proxy_redirect_off: true
+    buffering_off: true
+  - name: crowdsec-dashboard
+    port: 3000
+    iframe_friendly: true
+  - name: foundryvtt
+    port: 30000
+    client_max_body_size: 300M
+  - name: gaps
+    port: 8484
+    hide_xframe: true
+  - name: notifiarr
+    port: 5454
+  - name: octoprint
+    port: 80
+    set_x_scheme: true
+  - name: pgadmin
+    port: 80
+    hide_x_forwarded_port: true
+    iframe_friendly: true
+  - name: pterodactyl
+    port: 80
+  - name: saltrim
+    port: 3000
+    client_max_body_size: 100M
+  - name: semaphore
+    port: 3000
+  - name: themepark
+    port: 80
+  - name: tinyauth
+    port: 3000
+  # --- MIGRATED FROM CUSTOM ---
+  - name: adguard
+    port: 80
+    extra_locations:
+      - path: /control
+      - path: /dns-query
+  - name: aria2-with-webui
+    port: 80
+    extra_locations:
+      - path: /jsonrpc
+        port: 6800
+        proxy_pass_path: /jsonrpc
+      - path: /rpc
+        port: 6800
+        proxy_pass_path: /rpc
+  - name: asciinema
+    port: 4000
+    extra_locations:
+      - path: /dashboard
+        port: 4002
+  - name: authelia
+    port: 9091
+    extra_locations:
+      - path: /api
+  - name: authentik
+    port: 9000
+    extra_locations:
+      - path: /api
+  - name: bitwarden
+    port: 8080
+    client_max_body_size: 128M
+    extra_locations:
+      - path: /admin
+      - path: /api
+      - path: /notifications/hub
+  - name: calibre
+    port: 8080
+    buffering_off: true
+    extra_locations:
+      - path: /content-server/
+        port: 8081
+  - name: calibre-web
+    port: 8083
+    proxy_set_headers:
+      - key: X-Scheme
+        value: $scheme
+    extra_locations:
+      - path: /opds/
+        proxy_set_headers:
+          - key: X-Scheme
+            value: $scheme
+      - path: /kobo/
+        proxy_set_headers:
+          - key: X-Forwarded-Host
+            value: $http_host
+          - key: X-Scheme
+            value: $scheme
+        custom_directives:
+          - proxy_buffer_size 128k
+          - proxy_buffers 4 256k
+          - proxy_busy_buffers_size 256k
+  - name: emby
+    port: 8096
+    proxy_set_headers:
+      - key: Range
+        value: $http_range
+      - key: If-Range
+        value: $http_if_range
+  - name: emulatorjs
+    port: 80
+    extra_locations:
+      - path: /backend/
+        port: 3000
+  - name: filebrowser
+    port: 8080
+    extra_locations:
+      - path: /api/public
+      - path: /share
+      - path: /static
+  - name: gitea
+    port: 3000
+    extra_locations:
+      - path: /(api|info/lfs)
+  - name: homeassistant
+    port: 8123
+    extra_locations:
+      - path: ^/(api|local|media)/
+  - name: jackett
+    port: 9117
+    extra_locations:
+      - path: /api
+      - path: /dl
+  - name: jdownloader
+    port: 5800
+    extra_locations:
+      - path: /websockify
+        proxy_pass_path: /websockify
+  - name: metabase
+    port: 3000
+    extra_locations:
+      - path: ^/api
+  - name: nzbget
+    port: 6789
+    extra_locations:
+      - path: /(/[^\/:]*:[^\/:]*)?/jsonrpc
+      - path: /(/[^\/:]*:[^\/]*)?/jsonprpc
+      - path: /(/[^\/:]*:[^\/]*)?/xmlrpc
+  - name: nzbhydra
+    port: 5076
+    extra_locations:
+      - path: /api
+      - path: /getnzb
+      - path: /gettorrent
+      - path: /rss
+      - path: /torznab/api
+  - name: ombi
+    port: 3579
+    extra_locations:
+      - path: /api
+      - path: /swagger
+    custom_directives:
+      - if ($http_referer ~* /ombi) { rewrite ^/swagger/(.*) /ombi/swagger/$1? redirect; }
+  - name: organizr
+    port: 80
+  - name: pihole
+    port: 80
+    proxy_hide_headers:
+      - X-Frame-Options
+    extra_locations:
+      - path: /admin
+        proxy_hide_headers:
+          - X-Frame-Options
+  - name: plex
+    port: 32400
+    proxy_redirect_off: true
+    buffering_off: true
+    proxy_set_headers:
+      - { key: X-Plex-Client-Identifier, value: $http_x_plex_client_identifier }
+      - { key: X-Plex-Device, value: $http_x_plex_device }
+      - { key: X-Plex-Device-Name, value: $http_x_plex_device_name }
+      - { key: X-Plex-Platform, value: $http_x_plex_platform }
+      - { key: X-Plex-Platform-Version, value: $http_x_plex_platform_version }
+      - { key: X-Plex-Product, value: $http_x_plex_product }
+      - { key: X-Plex-Token, value: $http_x_plex_token }
+      - { key: X-Plex-Version, value: $http_x_plex_version }
+      - { key: X-Plex-Nocache, value: $http_x_plex_nocache }
+      - { key: X-Plex-Provides, value: $http_x_plex_provides }
+      - { key: X-Plex-Device-Vendor, value: $http_x_plex_device_vendor }
+      - { key: X-Plex-Model, value: $http_x_plex_model }
+    extra_locations:
+      - path: /library/streams/
+        custom_directives:
+          - proxy_pass_request_headers off
+  - name: plexwebtools
+    port: 33400
+    app: plex
+  - name: portainer
+    port: 9000
+    proxy_hide_headers:
+      - X-Frame-Options
+    extra_locations:
+      - path: /api
+        proxy_hide_headers:
+          - X-Frame-Options
+  - name: prometheus
+    port: 9090
+    extra_locations:
+      - path: /api
+      - path: /-/(healthy|ready|reload|quit)
+  - name: prowlarr
+    port: 9696
+    extra_locations:
+      - path: /(/[0-9]+)?/api
+      - path: /(/[0-9]+)?/download
+  - name: pterodactylnode
+    port: 443
+    extra_locations:
+      - path: /api
+  - name: sonarrtorss
+    port: 18989
+    extra_locations:
+      - path: ^/(api/|sonarr$|rss$|atom$|json$)
+  - name: synclounge
+    port: 8088
+    websockets: true
+  - name: syncthing
+    port: 8384
+    proxy_hide_headers:
+      - Authorization
+    extra_locations:
+      - path: /rest
+        proxy_hide_headers:
+          - Authorization
+  - name: tautulli
+    port: 8181
+    extra_locations:
+      - path: /api
+      - path: /newsletter
+      - path: /image
+  - name: transmission
+    port: 9091
+    proxy_pass_headers:
+      - X-Transmission-Session-Id
+    extra_locations:
+      - path: /rpc
+  - name: ubooquity
+    port: 2202
+    extra_locations:
+      - path: /admin
+        port: 2203
+      - path: /admin-res
+        port: 2203
+      - path: /admin-api
+        port: 2203
+  - name: uptime-kuma
+    port: 3001
+    extra_locations:
+      - path: /(status|assets|icon.svg)
+  - name: vaultwarden
+    port: 80
+    client_max_body_size: 128M
+    extra_locations:
+      - path: ^/admin
+      - path: /api
+      - path: /notifications/hub
+  - name: watchstate
+    port: 8080
+    extra_locations:
+      - path: /v1/api
+  - name: wikijs
+    port: 3000
+    extra_locations:
+      - path: /graphql

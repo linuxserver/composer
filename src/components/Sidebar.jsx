@@ -16,7 +16,9 @@ const Sidebar = ({ onDragStartItem, itemDefinitions, isOpen, onToggleLsioModal, 
 
   const overrides = [];
   const topLevel = [];
-  const general = [];
+  const ingressEgress = [];
+  const swag = [];
+  const swagAuth = [];
 
   if (itemDefinitions) {
     const overrideKeys = [
@@ -26,6 +28,9 @@ const Sidebar = ({ onDragStartItem, itemDefinitions, isOpen, onToggleLsioModal, 
       'Secret', 'Config'
     ];
     const topLevelKeys = ['Top-level Network', 'Top-level Secret', 'Top-level Volume', 'Top-level Config'];
+    const ingressEgressKeys = ['Default Bridge'];
+    const swagKeys = ['DuckDNS SWAG'];
+    const swagAuthKeys = ['Basic'];
 
     Object.keys(itemDefinitions).forEach(key => {
       const item = { id: key, ...itemDefinitions[key].definition };
@@ -34,8 +39,12 @@ const Sidebar = ({ onDragStartItem, itemDefinitions, isOpen, onToggleLsioModal, 
         overrides.push(item);
       } else if (topLevelKeys.includes(item.name)) {
         topLevel.push(item);
-      } else {
-        general.push(item);
+      } else if (ingressEgressKeys.includes(item.name)) {
+        ingressEgress.push(item);
+      } else if (swagKeys.includes(item.name)) {
+        swag.push(item);
+      } else if (swagAuthKeys.includes(item.name)) {
+        swagAuth.push(item);
       }
     });
   }
@@ -58,7 +67,19 @@ const Sidebar = ({ onDragStartItem, itemDefinitions, isOpen, onToggleLsioModal, 
         <details>
           <summary>Ingress/Egress</summary>
           <div className="sidebar-group">
-            {general.map(item => <DraggableItem key={item.id} item={item} onDragStartItem={onDragStartItem} />)}
+            {ingressEgress.map(item => <DraggableItem key={item.id} item={item} onDragStartItem={onDragStartItem} />)}
+            <details>
+              <summary>SWAG</summary>
+              <div className="sidebar-group" style={{paddingLeft: '0.5rem'}}>
+                {swag.map(item => <DraggableItem key={item.id} item={item} onDragStartItem={onDragStartItem} />)}
+              </div>
+            </details>
+            <details>
+              <summary>SWAG Auth</summary>
+              <div className="sidebar-group" style={{paddingLeft: '0.5rem'}}>
+                {swagAuth.map(item => <DraggableItem key={item.id} item={item} onDragStartItem={onDragStartItem} />)}
+              </div>
+            </details>
           </div>
         </details>
 
