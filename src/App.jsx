@@ -82,10 +82,25 @@ function App() {
   const [pendingUrlTemplate, setPendingUrlTemplate] = useState(null);
   const [isUploadConfirmOpen, setIsUploadConfirmOpen] = useState(false);
   const [pendingFile, setPendingFile] = useState(null);
+  const [isDefinitionsLoaded, setIsDefinitionsLoaded] = useState(false);
 
   const workspaceContainerRef = useRef(null);
   const originalItemsRef = useRef([]);
   const saveTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    const setRealViewportHeight = () => {
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
+    };
+
+    setRealViewportHeight();
+    window.addEventListener('resize', setRealViewportHeight);
+
+    return () => {
+      window.removeEventListener('resize', setRealViewportHeight);
+    };
+  }, []);
 
   const toggleSidebar = () => {
     setIsSidebarOpen(prev => !prev);
@@ -110,7 +125,23 @@ function App() {
             const jsonString = decodeURIComponent(escape(atob(base64String)));
             const sessionData = JSON.parse(jsonString);
             if (sessionData.items && sessionData.connections && sessionData.transform) {
-                setWorkspaceItems(sessionData.items);
+                const rehydratedItems = sessionData.items.map(item => {
+                    const definitionFromLoadedData = loadedItemData[item.type]?.definition;
+                    const isCustomContainer = item.type === 'Container' && item.definition;
+                    const finalDefinition = isCustomContainer ? item.definition : definitionFromLoadedData;
+
+                    if (finalDefinition) {
+                        return { ...item, definition: finalDefinition };
+                    }
+                    console.warn(`Could not find definition for loaded item type: ${item.type}`);
+                    return null;
+                }).filter(Boolean);
+
+                if (rehydratedItems.length !== sessionData.items.length) {
+                    throw new Error("Could not load all items from file. Some item definitions may be missing.");
+                }
+
+                setWorkspaceItems(rehydratedItems);
                 setConnections(sessionData.connections);
                 setTransform(sessionData.transform);
                 setSelectedElement(null);
@@ -119,12 +150,12 @@ function App() {
             }
         } catch (error) {
             console.error('Failed to parse composer data from file:', error);
-            alert('Error: Could not parse the composer data from the dropped file.');
+            alert(`Error: Could not parse the composer data from the dropped file. ${error.message}`);
         }
     } else {
         alert('This does not appear to be a valid LSIO Composer file (missing metadata).');
     }
-  }, []);
+  }, [loadedItemData]);
 
   const loadFromUrl = useCallback(async (url) => {
     try {
@@ -153,7 +184,56 @@ function App() {
     setIsUrlLoadConfirmOpen(false);
   };
 
+  // Effect 1: Load all item definitions once on startup.
   useEffect(() => {
+    const loadItems = async () => {
+      const loadedData = {};
+      for (const path in itemModules) {
+        const module = itemModules[path];
+        const componentName = path.split('/').pop().replace('.jsx', '');
+        loadedData[componentName] = {
+          definition: module.itemDefinition,
+          ItemComponent: module.ItemComponent,
+        };
+      }
+      
+      loadedData['ColorBox'] = { definition: ColorBoxDefinition, ItemComponent: ColorBoxItemComponent };
+      loadedData['Container'] = { definition: null, ItemComponent: ContainerItemComponent };
+
+      try {
+        const swagResponse = await fetch('swag_data.yml');
+        const swagYaml = await swagResponse.text();
+        const swagData = yaml.load(swagYaml);
+        setSwagConfigs(swagData.swag_configs || []);
+      } catch (e) {
+        console.error("Failed to load swag_data.yml", e);
+      }
+
+      try {
+        const response = await fetch(API_URL);
+        if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
+        const apiData = await response.json();
+        const containers = apiData?.data?.repositories?.linuxserver || [];
+        containers.forEach(container => {
+          const containerType = container.name; 
+          loadedData[containerType] = {
+            definition: createContainerDefinition(container),
+            ItemComponent: ContainerItemComponent,
+          };
+        });
+      } catch (error) {
+        console.error("Failed to load or parse container data from API:", error);
+      }
+      setLoadedItemData(loadedData);
+      setIsDefinitionsLoaded(true);
+    };
+    loadItems();
+  }, []);
+
+  // Effect 2: Load session state from localStorage or URL, but only after definitions are loaded.
+  useEffect(() => {
+    if (!isDefinitionsLoaded) return;
+
     let sessionItems = [];
     let sessionConnections = [];
     let sessionTransform = { x: 0, y: 0, scale: 1 };
@@ -164,11 +244,26 @@ function App() {
       if (savedSession) {
         const sessionData = JSON.parse(savedSession);
         if (sessionData.items && sessionData.connections && sessionData.transform) {
-          if (sessionData.items.every(item => item.definition)) {
-            sessionItems = sessionData.items;
+          const rehydratedItems = sessionData.items.map(item => {
+            const definitionFromLoadedData = loadedItemData[item.type]?.definition;
+            const isCustomContainer = item.type === 'Container' && item.definition;
+            const finalDefinition = isCustomContainer ? item.definition : definitionFromLoadedData;
+
+            if (finalDefinition) {
+              return { ...item, definition: finalDefinition };
+            }
+            console.warn(`Could not find definition for saved item type: ${item.type}`);
+            return null;
+          }).filter(Boolean);
+
+          if (rehydratedItems.length === sessionData.items.length) {
+            sessionItems = rehydratedItems;
             sessionConnections = sessionData.connections;
             sessionTransform = sessionData.transform;
             isSessionLoaded = true;
+          } else {
+            console.error("Session data mismatch with current item definitions. Clearing session.");
+            localStorage.removeItem(LOCAL_STORAGE_KEY);
           }
         }
       }
@@ -197,7 +292,7 @@ function App() {
         const rect = workspaceContainerRef.current.getBoundingClientRect();
         setTransform({ x: rect.width / 2, y: rect.height / 2, scale: 1 });
     }
-  }, [loadFromUrl]);
+  }, [isDefinitionsLoaded, loadedItemData, loadFromUrl]);
 
   useEffect(() => {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -492,50 +587,6 @@ function App() {
         e.dataTransfer.clearData();
     }
   }, [draggingItem, handleUploadRequest]);
-
-  useEffect(() => {
-    const loadItems = async () => {
-      const loadedData = {};
-      for (const path in itemModules) {
-        const module = itemModules[path];
-        const componentName = path.split('/').pop().replace('.jsx', '');
-        loadedData[componentName] = {
-          definition: module.itemDefinition,
-          ItemComponent: module.ItemComponent,
-        };
-      }
-      
-      loadedData['ColorBox'] = { definition: ColorBoxDefinition, ItemComponent: ColorBoxItemComponent };
-      loadedData['Container'] = { definition: null, ItemComponent: ContainerItemComponent };
-
-      try {
-        const swagResponse = await fetch('swag_data.yml');
-        const swagYaml = await swagResponse.text();
-        const swagData = yaml.load(swagYaml);
-        setSwagConfigs(swagData.swag_configs || []);
-      } catch (e) {
-        console.error("Failed to load swag_data.yml", e);
-      }
-
-      try {
-        const response = await fetch(API_URL);
-        if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
-        const apiData = await response.json();
-        const containers = apiData?.data?.repositories?.linuxserver || [];
-        containers.forEach(container => {
-          const containerType = container.name; 
-          loadedData[containerType] = {
-            definition: createContainerDefinition(container),
-            ItemComponent: ContainerItemComponent,
-          };
-        });
-      } catch (error) {
-        console.error("Failed to load or parse container data from API:", error);
-      }
-      setLoadedItemData(loadedData);
-    };
-    loadItems();
-  }, []);
 
   const propagateItemUpdate = useCallback((startItemId, currentItems, currentConnections, allOriginalItems) => {
     let itemsToUpdate = [...currentItems];
@@ -888,15 +939,24 @@ function App() {
     });
   }, [workspaceItems, connections, propagateItemUpdate]);
 
+  const handleDeleteItem = useCallback((itemId) => {
+      const connectionsToRemove = connections.filter(c => c.from.itemId === itemId || c.to.itemId === itemId);
+      
+      connectionsToRemove.forEach(handleDisconnection);
+      
+      setConnections(conns => conns.filter(c => c.from.itemId !== itemId && c.to.itemId !== itemId));
+      setWorkspaceItems(items => items.filter(item => item.id !== itemId));
+      
+      if (selectedElement?.id === itemId) {
+          setSelectedElement(null);
+      }
+  }, [connections, handleDisconnection, selectedElement]);
+
   useEffect(() => {
     const handleKeyDown = (e) => {
       if ((e.key === 'Delete') && selectedElement) {
         if (selectedElement.type === 'item') {
-          const itemId = selectedElement.id;
-          const connectionsToRemove = connections.filter(c => c.from.itemId === itemId || c.to.itemId === itemId);
-          connectionsToRemove.forEach(handleDisconnection);
-          setConnections(conns => conns.filter(c => c.from.itemId !== itemId && c.to.itemId !== itemId));
-          setWorkspaceItems(items => items.filter(item => item.id !== itemId));
+          handleDeleteItem(selectedElement.id);
         } else if (selectedElement.type === 'connection') {
           const connId = selectedElement.id;
           const connToRemove = connections.find(c => c.id === connId);
@@ -910,7 +970,7 @@ function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedElement, connections, handleDisconnection]);
+  }, [selectedElement, connections, handleDisconnection, handleDeleteItem]);
 
   const handleDragStart = (e, item) => {
     e.dataTransfer.setData('application/reactflow', item.id);
@@ -920,6 +980,14 @@ function App() {
     e.dataTransfer.setDragImage(img, 0, 0);
     setDraggingItem({ type: item.id, ...loadedItemData[item.id].definition, ghostPosition: null });
   };
+  
+  const handleTouchDragStart = useCallback((e, item) => {
+    setDraggingItem({ type: item.id, ...loadedItemData[item.id].definition, ghostPosition: null });
+    if (isLsioModalOpen) {
+        setIsLsioModalOpen(false);
+    }
+  }, [loadedItemData, isLsioModalOpen]);
+
 
   const handleDragOver = useCallback((e) => {
     e.preventDefault();
@@ -936,40 +1004,45 @@ function App() {
     if (draggingItem) setDraggingItem(prev => ({ ...prev, ghostPosition: null }));
   }, [draggingItem]);
 
-  const handleDrop = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!draggingItem || !draggingItem.ghostPosition) {
-      if (draggingItem) setDraggingItem(null);
-      handleFileDrop(e);
-      return;
-    };
-    const { ghostPosition, type } = draggingItem;
-    const itemDefinition = loadedItemData[type].definition;
-    const { x: x1, y: y1 } = ghostPosition;
-    const x2 = x1 + itemDefinition.defaultSize.width * GRID_SIZE;
-    const y2 = y1 + itemDefinition.defaultSize.height * GRID_SIZE;
-    
-    let finalData = { ...(itemDefinition.defaultData || {}), linkedInputs: {} };
-
-    // Handle container name de-duplication
-    const isContainer = itemDefinition.inputs.some(i => i.id === 'depends_on');
-    if (isContainer || type === 'DuckdnsSwag') {
-      const baseName = finalData.container_name || type;
-      let newContainerName = baseName;
-      let counter = 1;
-      const allContainerNames = new Set(workspaceItems.map(item => item.data?.container_name).filter(Boolean));
-      while (allContainerNames.has(newContainerName)) {
-          newContainerName = `${baseName}-${counter}`;
-          counter++;
-      }
-      finalData.container_name = newContainerName;
+  const handleDrop = useCallback((e, position) => {
+    if(e) {
+      e.preventDefault();
+      e.stopPropagation();
     }
+    
+    const dropPosition = position || draggingItem?.ghostPosition;
 
-    const newItem = { id: `item_${Date.now()}`, type, definition: itemDefinition, coords: { x1, y1, x2, y2 }, data: finalData };
-    setWorkspaceItems((items) => [...items, newItem]);
-    setSelectedElement({ id: newItem.id, type: 'item' });
-    setDraggingItem(null);
+    if (draggingItem && dropPosition) {
+        const { type } = draggingItem;
+        const itemDefinition = loadedItemData[type].definition;
+        const { x: x1, y: y1 } = dropPosition;
+        const x2 = x1 + itemDefinition.defaultSize.width * GRID_SIZE;
+        const y2 = y1 + itemDefinition.defaultSize.height * GRID_SIZE;
+        
+        let finalData = { ...(itemDefinition.defaultData || {}), linkedInputs: {} };
+
+        const isContainer = itemDefinition.inputs.some(i => i.id === 'depends_on');
+        if (isContainer || type === 'DuckdnsSwag') {
+          const baseName = finalData.container_name || type;
+          let newContainerName = baseName;
+          let counter = 1;
+          const allContainerNames = new Set(workspaceItems.map(item => item.data?.container_name).filter(Boolean));
+          while (allContainerNames.has(newContainerName)) {
+              newContainerName = `${baseName}-${counter}`;
+              counter++;
+          }
+          finalData.container_name = newContainerName;
+        }
+
+        const newItem = { id: `item_${Date.now()}`, type, definition: itemDefinition, coords: { x1, y1, x2, y2 }, data: finalData };
+        setWorkspaceItems((items) => [...items, newItem]);
+        setSelectedElement({ id: newItem.id, type: 'item' });
+        setDraggingItem(null);
+    } else if (e?.dataTransfer?.files?.length > 0) {
+        handleFileDrop(e);
+    } else if (draggingItem) {
+        setDraggingItem(null);
+    }
   }, [draggingItem, handleFileDrop, loadedItemData, workspaceItems]);
 
   const handleAddCustomContainer = useCallback(({ name, iconUrl }) => {
@@ -1021,12 +1094,13 @@ function App() {
   return (
     <div 
       className="app-container"
-      onDrop={handleDrop}
+      onDrop={handleFileDrop}
       onDragOver={(e) => e.preventDefault()}
       style={{'--sidebar-width': isSidebarOpen ? '250px' : '0px'}}
     >
       <Sidebar
         onDragStartItem={handleDragStart}
+        onTouchStartItem={handleTouchDragStart}
         itemDefinitions={sidebarItemDefinitions}
         isOpen={isSidebarOpen}
         onToggleLsioModal={toggleLsioModal}
@@ -1048,6 +1122,7 @@ function App() {
         onTransformChange={setTransform}
         itemComponents={loadedItemData}
         draggingItem={draggingItem}
+        setDraggingItem={setDraggingItem}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -1057,6 +1132,7 @@ function App() {
         onClearCanvasRequest={handleClearCanvasRequest}
         onGenerateComposeRequest={generateComposeFile}
         onUploadRequest={handleUploadRequest}
+        onDeleteItem={handleDeleteItem}
       />
       <ConfirmationModal
         isOpen={isClearModalOpen}
@@ -1091,6 +1167,7 @@ function App() {
         isOpen={isLsioModalOpen}
         onClose={() => setIsLsioModalOpen(false)}
         onDragStartItem={handleDragStart}
+        onTouchStartItem={handleTouchDragStart}
         lsioApps={lsioApps}
       />
       <AddContainerModal

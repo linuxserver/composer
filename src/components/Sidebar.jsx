@@ -1,18 +1,19 @@
 import React from 'react';
 import '../styles/Sidebar.css';
 
-const DraggableItem = ({ item, onDragStartItem }) => (
+const DraggableItem = ({ item, onDragStartItem, onTouchStartItem }) => (
   <div
     key={item.id}
     className="sidebar-item"
     draggable
     onDragStart={(e) => onDragStartItem(e, item)}
+    onTouchStart={(e) => onTouchStartItem(e, item)}
   >
     {item.name}
   </div>
 );
 
-const Sidebar = ({ onDragStartItem, itemDefinitions, isOpen, onToggleLsioModal, onOpenAddContainerModal }) => {
+const Sidebar = ({ onDragStartItem, onTouchStartItem, itemDefinitions, isOpen, onToggleLsioModal, onOpenAddContainerModal }) => {
 
   const overrides = [];
   const topLevel = [];
@@ -67,17 +68,17 @@ const Sidebar = ({ onDragStartItem, itemDefinitions, isOpen, onToggleLsioModal, 
         <details>
           <summary>Ingress/Egress</summary>
           <div className="sidebar-group">
-            {ingressEgress.map(item => <DraggableItem key={item.id} item={item} onDragStartItem={onDragStartItem} />)}
+            {ingressEgress.map(item => <DraggableItem key={item.id} item={item} onDragStartItem={onDragStartItem} onTouchStartItem={onTouchStartItem} />)}
             <details>
               <summary>SWAG</summary>
               <div className="sidebar-group" style={{paddingLeft: '0.5rem'}}>
-                {swag.map(item => <DraggableItem key={item.id} item={item} onDragStartItem={onDragStartItem} />)}
+                {swag.map(item => <DraggableItem key={item.id} item={item} onDragStartItem={onDragStartItem} onTouchStartItem={onTouchStartItem} />)}
               </div>
             </details>
             <details>
               <summary>SWAG Auth</summary>
               <div className="sidebar-group" style={{paddingLeft: '0.5rem'}}>
-                {swagAuth.map(item => <DraggableItem key={item.id} item={item} onDragStartItem={onDragStartItem} />)}
+                {swagAuth.map(item => <DraggableItem key={item.id} item={item} onDragStartItem={onDragStartItem} onTouchStartItem={onTouchStartItem} />)}
               </div>
             </details>
           </div>
@@ -86,14 +87,14 @@ const Sidebar = ({ onDragStartItem, itemDefinitions, isOpen, onToggleLsioModal, 
         <details>
           <summary>Settings Overrides</summary>
           <div className="sidebar-group">
-            {overrides.map(item => <DraggableItem key={item.id} item={item} onDragStartItem={onDragStartItem} />)}
+            {overrides.map(item => <DraggableItem key={item.id} item={item} onDragStartItem={onDragStartItem} onTouchStartItem={onTouchStartItem} />)}
           </div>
         </details>
 
         <details>
           <summary>Top Level</summary>
           <div className="sidebar-group">
-            {topLevel.map(item => <DraggableItem key={item.id} item={item} onDragStartItem={onDragStartItem} />)}
+            {topLevel.map(item => <DraggableItem key={item.id} item={item} onDragStartItem={onDragStartItem} onTouchStartItem={onTouchStartItem} />)}
           </div>
         </details>
 

@@ -4,6 +4,7 @@
   overflow: hidden;
   cursor: grab;
   background-color: #282c34;
+  touch-action: none;
   background-image:
     linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);

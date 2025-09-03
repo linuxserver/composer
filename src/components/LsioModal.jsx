@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import '../styles/LsioModal.css';
 
-const LsioModal = ({ isOpen, onClose, onDragStartItem, lsioApps }) => {
+const LsioModal = ({ isOpen, onClose, onDragStartItem, onTouchStartItem, lsioApps }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredApps = useMemo(() => {
@@ -37,6 +37,7 @@ const LsioModal = ({ isOpen, onClose, onDragStartItem, lsioApps }) => {
             className="lsio-grid-item"
             draggable
             onDragStart={(e) => onDragStartItem(e, app)}
+            onTouchStart={(e) => onTouchStartItem(e, app)}
             title={`Drag to add ${app.name}`}
           >
             <img src={app.icon || 'docker-logo.svg'} alt={`${app.name} logo`} />

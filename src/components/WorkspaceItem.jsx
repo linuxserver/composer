@@ -73,7 +73,17 @@ export const getDynamicDefinition = (item, staticDefinition) => {
 };
 
 
-const renderConnectors = (item, definition, onConnectorInteraction) => {
+const renderConnectors = (item, definition, onStartLinking, onEndLinking) => {
+  const handleStart = (e, connectorId) => {
+    e.stopPropagation();
+    onStartLinking(item.id, connectorId);
+  };
+
+  const handleEnd = (e, connectorId) => {
+    e.stopPropagation();
+    onEndLinking(item.id, connectorId);
+  };
+
   const renderConnectorSet = (connectors, setType) => (
     <div className={`connectors-column ${setType}`}>
       {connectors.map((connector) => (
@@ -87,7 +97,10 @@ const renderConnectors = (item, definition, onConnectorInteraction) => {
               backgroundColor: connector.color || '#9f7aea',
               cursor: connector.disabled ? 'not-allowed' : 'crosshair'
             }}
-            onMouseDown={!connector.disabled ? (e) => onConnectorInteraction(e, item.id, connector.id, setType) : null}
+            onMouseDown={!connector.disabled && setType === 'outputs' ? (e) => handleStart(e, connector.id) : null}
+            onTouchStart={!connector.disabled && setType === 'outputs' ? (e) => handleStart(e, connector.id) : null}
+            onMouseUp={!connector.disabled && setType === 'inputs' ? (e) => handleEnd(e, connector.id) : null}
+            onTouchEnd={!connector.disabled && setType === 'inputs' ? (e) => handleEnd(e, connector.id) : null}
           />
           <span className="connector-label">{connector.name}</span>
         </div>
@@ -156,8 +169,10 @@ const WorkspaceItem = ({
   isSelected,
   itemComponents,
   onStartItemInteraction,
-  onConnectorInteraction,
+  onStartLinking,
+  onEndLinking,
   onItemDataChange,
+  onDeleteItem,
 }) => {
   const { x1, y1, x2, y2 } = item.coords;
   const width = x2 - x1;
@@ -189,9 +204,20 @@ const WorkspaceItem = ({
           boxShadow: 'none',
         }}
       >
+        {isSelected && (
+          <button
+            className="delete-item-btn"
+            onMouseDown={(e) => { e.stopPropagation(); onDeleteItem(item.id); }}
+            onTouchStart={(e) => { e.stopPropagation(); onDeleteItem(item.id); }}
+            title="Delete Item"
+          >
+            &times;
+          </button>
+        )}
         <div
           className="color-box-draggable-header"
           onMouseDown={(e) => onStartItemInteraction(e, item.id, 'move')}
+          onTouchStart={(e) => onStartItemInteraction(e, item.id, 'move')}
           style={{
             backgroundColor: hexToRgba(color, 0.4),
             borderRight: `2px solid ${color}`,
@@ -206,6 +232,7 @@ const WorkspaceItem = ({
         <div
           className="resize-handle"
           onMouseDown={(e) => onStartItemInteraction(e, item.id, 'resize')}
+          onTouchStart={(e) => onStartItemInteraction(e, item.id, 'resize')}
         />
       </div>
     );
@@ -233,13 +260,24 @@ const WorkspaceItem = ({
       style={{ left: `${x1}px`, top: `${y1}px`, width: `${width}px`, height: `${height}px` }}
     >
       <div className={`workspace-item-content ${isSelected ? 'selected' : ''}`}>
+        {isSelected && (
+          <button
+            className="delete-item-btn"
+            onMouseDown={(e) => { e.stopPropagation(); onDeleteItem(item.id); }}
+            onTouchStart={(e) => { e.stopPropagation(); onDeleteItem(item.id); }}
+            title="Delete Item"
+          >
+            &times;
+          </button>
+        )}
         <div
           className="item-header"
           onMouseDown={(e) => onStartItemInteraction(e, item.id, 'move')}
+          onTouchStart={(e) => onStartItemInteraction(e, item.id, 'move')}
         >
           {definition.name}
         </div>
-        {renderConnectors(item, definition, onConnectorInteraction)}
+        {renderConnectors(item, definition, onStartLinking, onEndLinking)}
         <div className="item-body">
           <ItemContentComponent
             itemData={item}
@@ -251,6 +289,7 @@ const WorkspaceItem = ({
       <div
         className="resize-handle"
         onMouseDown={(e) => onStartItemInteraction(e, item.id, 'resize')}
+        onTouchStart={(e) => onStartItemInteraction(e, item.id, 'resize')}
       />
     </div>
   );

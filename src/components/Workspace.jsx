@@ -2,7 +2,7 @@ import React, { useState, forwardRef, useMemo, useCallback, useEffect, useRef } 
 import WorkspaceItem from './WorkspaceItem';
 import ColorPicker from './ColorPicker';
 import '../styles/Workspace.css';
-import { getDynamicDefinition } from './WorkspaceItem'; // Import the corrected, shared function
+import { getDynamicDefinition } from './WorkspaceItem';
 
 const GRID_SIZE = 20;
 
@@ -19,16 +19,19 @@ const calculatePath = (startPos, endPos) => {
 
 const Workspace = forwardRef(({
   items, setItems, connections, onConnectionMade, transform, onTransformChange, itemComponents,
-  draggingItem, onDrop, onDragOver, onDragLeave, selectedElement, setSelectedElement, onItemDataChange,
-  onClearCanvasRequest, onGenerateComposeRequest, onUploadRequest
+  draggingItem, setDraggingItem, onDrop, onDragOver, onDragLeave, selectedElement, setSelectedElement, onItemDataChange,
+  onClearCanvasRequest, onGenerateComposeRequest, onUploadRequest, onDeleteItem
 }, ref) => {
   const [interaction, setInteraction] = useState({ type: null, itemId: null });
-  const [linking, setLinking] = useState(null);
+  const [linking, setLinking] = useState(null); // { from: { itemId, connectorId }, currentPos: {x, y} }
   const [connectionPaths, setConnectionPaths] = useState([]);
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const [colorPickerPosition, setColorPickerPosition] = useState(null);
   const [paintingState, setPaintingState] = useState(null);
   const fileInputRef = useRef(null);
+
+  const pinchState = useRef({ isPinching: false, initialDist: 0, initialScale: 1 });
+  const stopCurrentInteraction = useRef(null);
 
   const getConnectorPosition = useCallback((itemId, connectorId) => {
     const element = document.getElementById(`${itemId}-${connectorId}`);
@@ -64,72 +67,8 @@ const Workspace = forwardRef(({
     setConnectionPaths(paths);
   }, [connections, items, transform, selectedElement, getConnectorPosition, setSelectedElement]);
 
-  useEffect(() => {
-    if (!linking) return;
-
-    const handleMouseMove = (e) => {
-      if (!ref.current) return;
-      const rect = ref.current.getBoundingClientRect();
-      const x = (e.clientX - rect.left - transform.x) / transform.scale;
-      const y = (e.clientY - rect.top - transform.y) / transform.scale;
-      setLinking(prev => ({ ...prev, to: { x, y } }));
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, [linking, ref, transform]);
-
-  useEffect(() => {
-    if (!paintingState) return;
-
-    const handleMouseMove = (e) => {
-      if (!ref.current) return;
-      const rect = ref.current.getBoundingClientRect();
-      const x = (e.clientX - rect.left - transform.x) / transform.scale;
-      const y = (e.clientY - rect.top - transform.y) / transform.scale;
-      const snappedX = Math.round(x / GRID_SIZE) * GRID_SIZE;
-      const snappedY = Math.round(y / GRID_SIZE) * GRID_SIZE;
-      setPaintingState(prev => ({ ...prev, position: { x: snappedX, y: snappedY } }));
-    };
-
-    const handleMouseDown = (e) => {
-      if (e.target.closest('.workspace-button')) {
-        setPaintingState(null);
-        return;
-      }
-      e.preventDefault();
-      e.stopPropagation();
-      
-      if (paintingState.position) {
-        const { color, size, position } = paintingState;
-        const newItem = {
-          id: `item_${Date.now()}`,
-          type: 'ColorBox',
-          definition: itemComponents['ColorBox'].definition,
-          coords: {
-            x1: position.x,
-            y1: position.y,
-            x2: position.x + size.width,
-            y2: position.y + size.height,
-          },
-          data: { color, label: 'New Group', notes: '' },
-        };
-        setItems(current => [...current, newItem]);
-        setSelectedElement({ id: newItem.id, type: 'item' });
-      }
-      setPaintingState(null);
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mousedown', handleMouseDown);
-
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mousedown', handleMouseDown);
-    };
-  }, [paintingState, ref, transform, setItems, setSelectedElement, itemComponents]);
-
-  const isConnectionValid = (from, to) => {
+  const isConnectionValid = useCallback((from, to) => {
+    if (!from || !to) return false;
     const fromItem = items.find(i => i.id === from.itemId);
     const toItem = items.find(i => i.id === to.itemId);
     if (!fromItem || !toItem) return false;
@@ -148,74 +87,114 @@ const Workspace = forwardRef(({
     }
 
     return true;
-  };
+  }, [items, connections]);
 
-  const handleConnectorInteraction = (e, itemId, connectorId, setType) => {
-    e.stopPropagation();
-    e.preventDefault();
-
-    if (linking) {
-      if (setType === 'inputs' && linking.from.itemId !== itemId) {
-        const from = linking.from;
-        const to = { itemId, connectorId };
-        if (isConnectionValid(from, to)) {
-            onConnectionMade({ from, to });
-        }
-      }
+  // Handles starting a new link from an output connector
+  const handleStartLinking = useCallback((fromItemId, fromConnectorId) => {
+    // If clicking the same output again, cancel the link
+    if (linking && linking.from.itemId === fromItemId && linking.from.connectorId === fromConnectorId) {
       setLinking(null);
-    } else {
-      if (setType === 'outputs') {
-        const startPos = getConnectorPosition(itemId, connectorId);
-        setLinking({ from: { itemId, connectorId }, to: startPos });
-
-        const handleMouseUp = (upEvent) => {
-          window.removeEventListener('mouseup', handleMouseUp);
-          
-          const targetEl = upEvent.target.closest('.connector');
-          if (targetEl) {
-            const endItemId = targetEl.dataset.itemid;
-            const endConnectorId = targetEl.dataset.connectorid;
-            
-            if (endItemId && endItemId !== itemId) {
-                const from = { itemId, connectorId };
-                const to = { itemId: endItemId, connectorId: endConnectorId };
-                if (isConnectionValid(from, to)) {
-                    onConnectionMade({ from, to });
-                }
-                setLinking(null);
-            }
-          }
-        };
-        window.addEventListener('mouseup', handleMouseUp);
-      }
+      return;
     }
-  };
+    const startPos = getConnectorPosition(fromItemId, fromConnectorId);
+    setLinking({ from: { itemId: fromItemId, connectorId: fromConnectorId }, currentPos: startPos });
+  }, [linking, getConnectorPosition]);
 
+  // Handles completing a link on an input connector
+  const handleEndLinking = useCallback((toItemId, toConnectorId) => {
+    if (linking) {
+      const from = linking.from;
+      const to = { itemId: toItemId, connectorId: toConnectorId };
+      if (isConnectionValid(from, to)) {
+        onConnectionMade({ from, to });
+      }
+      setLinking(null); // Always terminate the link
+    }
+  }, [linking, isConnectionValid, onConnectionMade]);
 
-  const startPan = (e) => {
+  // Effect to draw the linking line and handle cancellation
+  useEffect(() => {
+    if (!linking) return;
+
+    const handleMove = (e) => {
+      const isTouchEvent = e.type.startsWith('touch');
+      if (isTouchEvent) e.preventDefault();
+      const touch = isTouchEvent ? e.touches[0] : e;
+      
+      if (!ref.current) return;
+      const rect = ref.current.getBoundingClientRect();
+      const x = (touch.clientX - rect.left - transform.x) / transform.scale;
+      const y = (touch.clientY - rect.top - transform.y) / transform.scale;
+      setLinking(prev => (prev ? { ...prev, currentPos: { x, y } } : null));
+    };
+    
+    // Cancel linking if user clicks/taps anywhere else
+    const handleCancel = (e) => {
+      if (!e.target.closest('.connector')) {
+        setLinking(null);
+      }
+    };
+
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('touchmove', handleMove, { passive: false });
+    window.addEventListener('mousedown', handleCancel);
+    window.addEventListener('touchstart', handleCancel);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('touchmove', handleMove);
+      window.removeEventListener('mousedown', handleCancel);
+      window.removeEventListener('touchstart', handleCancel);
+    };
+  }, [linking, ref, transform.scale, transform.x, transform.y]);
+
+  const startPan = useCallback((e) => {
+    // This check is now the main guard against panning while linking
+    if (e.target.closest('.connector')) return;
+    if (interaction.type) return;
     if (isColorPickerOpen) {
       setIsColorPickerOpen(false);
       return;
     }
-    if (linking) {
-      setLinking(null);
-      return;
-    }
-    if (e.target.closest('.workspace-item') || e.target.closest('.connector') || e.target.closest('.connection-group')) return;
+    if (e.target.closest('.workspace-item') || e.target.closest('.connection-group')) return;
+    
+    const isTouchEvent = e.type.startsWith('touch');
+    if (isTouchEvent && e.touches.length > 1) return;
+    
     setSelectedElement(null);
     e.preventDefault();
-    const startX = e.clientX - transform.x;
-    const startY = e.clientY - transform.y;
+    
+    const touch = isTouchEvent ? e.touches[0] : e;
+    const startX = touch.clientX - transform.x;
+    const startY = touch.clientY - transform.y;
+
     const doPan = (moveEvent) => {
-      onTransformChange({ ...transform, x: moveEvent.clientX - startX, y: moveEvent.clientY - startY });
+      if (pinchState.current.isPinching) {
+        stopPan();
+        return;
+      }
+      const moveTouch = isTouchEvent ? moveEvent.touches[0] : moveEvent;
+      onTransformChange({ ...transform, x: moveTouch.clientX - startX, y: moveTouch.clientY - startY });
     };
     const stopPan = () => {
-      window.removeEventListener('mousemove', doPan);
-      window.removeEventListener('mouseup', stopPan);
+      stopCurrentInteraction.current = null;
+      if (isTouchEvent) {
+        window.removeEventListener('touchmove', doPan);
+        window.removeEventListener('touchend', stopPan);
+      } else {
+        window.removeEventListener('mousemove', doPan);
+        window.removeEventListener('mouseup', stopPan);
+      }
     };
-    window.addEventListener('mousemove', doPan);
-    window.addEventListener('mouseup', stopPan);
-  };
+    stopCurrentInteraction.current = stopPan;
+    if (isTouchEvent) {
+      window.addEventListener('touchmove', doPan);
+      window.addEventListener('touchend', stopPan);
+    } else {
+      window.addEventListener('mousemove', doPan);
+      window.addEventListener('mouseup', stopPan);
+    }
+  }, [interaction.type, isColorPickerOpen, setSelectedElement, transform, onTransformChange]);
 
   const handleWheel = useCallback((e) => {
     const scrollableParent = e.target.closest('.scrollable');
@@ -234,29 +213,29 @@ const Workspace = forwardRef(({
     onTransformChange({ x: newX, y: newY, scale: newScale });
   }, [ref, transform, onTransformChange]);
 
-  useEffect(() => {
-    const workspaceElement = ref.current;
-    if (workspaceElement) {
-      workspaceElement.addEventListener('wheel', handleWheel, { passive: false });
-      return () => {
-        workspaceElement.removeEventListener('wheel', handleWheel);
-      };
-    }
-  }, [ref, handleWheel]);
-
-  const handleStartItemInteraction = (e, itemId, type) => {
+  const handleStartItemInteraction = useCallback((e, itemId, type) => {
     if (e.target.closest('.connector')) return;
+    const isTouchEvent = e.type.startsWith('touch');
+    if (isTouchEvent && e.touches.length > 1) return;
+
     setSelectedElement({ id: itemId, type: 'item' });
     e.preventDefault();
     e.stopPropagation();
-    const startMouseX = e.clientX;
-    const startMouseY = e.clientY;
+
+    const touch = isTouchEvent ? e.touches[0] : e;
+    const startMouseX = touch.clientX;
+    const startMouseY = touch.clientY;
     const currentItem = items.find(it => it.id === itemId);
     const { x1, y1, x2, y2 } = currentItem.coords;
 
     const doInteraction = (moveEvent) => {
-      const dx = (moveEvent.clientX - startMouseX) / transform.scale;
-      const dy = (moveEvent.clientY - startMouseY) / transform.scale;
+      if (pinchState.current.isPinching) {
+        stopInteraction(moveEvent);
+        return;
+      }
+      const moveTouch = isTouchEvent ? moveEvent.touches[0] : moveEvent;
+      const dx = (moveTouch.clientX - startMouseX) / transform.scale;
+      const dy = (moveTouch.clientY - startMouseY) / transform.scale;
       let newCoords;
       if (type === 'move') {
         newCoords = { x1: x1 + dx, y1: y1 + dy, x2: x2 + dx, y2: y2 + dy };
@@ -267,20 +246,127 @@ const Workspace = forwardRef(({
     };
 
     const stopInteraction = () => {
+      stopCurrentInteraction.current = null;
       setInteraction({ type: null, itemId: null });
-      window.removeEventListener('mousemove', doInteraction);
-      window.removeEventListener('mouseup', stopInteraction);
+      if (isTouchEvent) {
+        window.removeEventListener('touchmove', doInteraction);
+        window.removeEventListener('touchend', stopInteraction);
+      } else {
+        window.removeEventListener('mousemove', doInteraction);
+        window.removeEventListener('mouseup', stopInteraction);
+      }
     };
     
+    stopCurrentInteraction.current = stopInteraction;
     setInteraction({ type, itemId });
-    window.addEventListener('mousemove', doInteraction);
-    window.addEventListener('mouseup', stopInteraction);
-  };
+    if (isTouchEvent) {
+      window.addEventListener('touchmove', doInteraction);
+      window.addEventListener('touchend', stopInteraction);
+    } else {
+      window.addEventListener('mousemove', doInteraction);
+      window.addEventListener('mouseup', stopInteraction);
+    }
+  }, [items, setItems, transform.scale, setSelectedElement]);
+
+  const handleTouchStart = useCallback((e) => {
+    if (e.target.closest('.connector')) return;
+    if (draggingItem) {
+      e.preventDefault();
+      const touch = e.touches[0];
+      if (!ref.current || !touch) return;
+      
+      const rect = ref.current.getBoundingClientRect();
+      const x = (touch.clientX - rect.left - transform.x) / transform.scale;
+      const y = (touch.clientY - rect.top - transform.y) / transform.scale;
+      const snappedX = Math.round(x / GRID_SIZE) * GRID_SIZE;
+      const snappedY = Math.round(y / GRID_SIZE) * GRID_SIZE;
+      
+      onDrop(null, { x: snappedX, y: snappedY });
+      return;
+    }
+
+    if (e.touches.length >= 2) {
+      if (stopCurrentInteraction.current) {
+        stopCurrentInteraction.current(e);
+      }
+      setInteraction({ type: null, itemId: null });
+      setLinking(null);
+
+      e.preventDefault();
+
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      pinchState.current = { isPinching: true, initialDist: dist, initialScale: transform.scale };
+    } else {
+      startPan(e);
+    }
+  }, [startPan, transform.scale, draggingItem, onDrop, ref, transform]);
+
+  const handleTouchMove = useCallback((e) => {
+    const scrollableParent = e.target.closest('.scrollable');
+    if (scrollableParent && scrollableParent.scrollHeight > scrollableParent.clientHeight && e.touches.length === 1 && !interaction.type && !linking) {
+      return; 
+    }
+    
+    if (pinchState.current.isPinching && e.touches.length >= 2) {
+      e.preventDefault();
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const newDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      const scale = pinchState.current.initialScale * (newDist / pinchState.current.initialDist);
+
+      const rect = ref.current.getBoundingClientRect();
+      const midX = (t1.clientX + t2.clientX) / 2 - rect.left;
+      const midY = (t1.clientY + t2.clientY) / 2 - rect.top;
+      const newScale = Math.max(0.2, Math.min(3, scale));
+      const scaleChange = newScale / transform.scale;
+
+      const newX = midX - (midX - transform.x) * scaleChange;
+      const newY = midY - (midY - transform.y) * scaleChange;
+
+      onTransformChange({ x: newX, y: newY, scale: newScale });
+
+    } else if (draggingItem && e.touches.length > 0) {
+      e.preventDefault();
+      const touch = e.touches[0];
+      if (!ref.current) return;
+      const rect = ref.current.getBoundingClientRect();
+      const x = (touch.clientX - rect.left - transform.x) / transform.scale;
+      const y = (touch.clientY - rect.top - transform.y) / transform.scale;
+      const snappedX = Math.round(x / GRID_SIZE) * GRID_SIZE;
+      const snappedY = Math.round(y / GRID_SIZE) * GRID_SIZE;
+      setDraggingItem(prev => ({ ...prev, ghostPosition: { x: snappedX, y: snappedY } }));
+    }
+  }, [ref, transform, onTransformChange, draggingItem, setDraggingItem, interaction.type, linking]);
+  
+  const handleTouchEnd = useCallback((e) => {
+    if (e.touches.length < 2) {
+      pinchState.current.isPinching = false;
+    }
+  }, []);
+  
+  useEffect(() => {
+    const workspaceElement = ref.current;
+    if (workspaceElement) {
+      workspaceElement.addEventListener('wheel', handleWheel, { passive: false });
+      workspaceElement.addEventListener('touchstart', handleTouchStart, { passive: false });
+      workspaceElement.addEventListener('touchmove', handleTouchMove, { passive: false });
+      workspaceElement.addEventListener('touchend', handleTouchEnd, { passive: false });
+      
+      return () => {
+        workspaceElement.removeEventListener('wheel', handleWheel);
+        workspaceElement.removeEventListener('touchstart', handleTouchStart);
+        workspaceElement.removeEventListener('touchmove', handleTouchMove);
+        workspaceElement.removeEventListener('touchend', handleTouchEnd);
+      };
+    }
+  }, [ref, handleWheel, handleTouchStart, handleTouchMove, handleTouchEnd]);
 
   const linkingPath = useMemo(() => {
     if (!linking) return null;
     const startPos = getConnectorPosition(linking.from.itemId, linking.from.connectorId);
-    const endPos = linking.to;
+    const endPos = linking.currentPos;
     return <path d={calculatePath(startPos, endPos)} className="linking-path" />;
   }, [linking, getConnectorPosition]);
 
@@ -400,26 +486,28 @@ const Workspace = forwardRef(({
             isSelected={selectedElement?.type === 'item' && selectedElement?.id === item.id}
             itemComponents={itemComponents}
             onStartItemInteraction={handleStartItemInteraction}
-            onConnectorInteraction={handleConnectorInteraction}
+            onStartLinking={handleStartLinking}
+            onEndLinking={handleEndLinking}
             onItemDataChange={onItemDataChange}
+            onDeleteItem={onDeleteItem}
           />
         ))}
         {renderDragGhost()}
         {renderPaintGhost()}
       </div>
       <div className="workspace-buttons-top-right">
-        <div className="workspace-button" onMouseDown={handleUploadClick} title="Upload Compose Template">
+        <div className="workspace-button" onMouseDown={handleUploadClick} onTouchStart={handleUploadClick} title="Upload Compose Template">
             <img src="upload.svg" alt="Upload Template" />
         </div>
-        <div className="workspace-button" onMouseDown={onGenerateComposeRequest} title="Generate Docker Compose">
+        <div className="workspace-button" onMouseDown={onGenerateComposeRequest} onTouchStart={onGenerateComposeRequest} title="Generate Docker Compose">
             <img src="docker-logo.svg" alt="Generate Docker Compose" />
         </div>
       </div>
       <div className="workspace-buttons-bottom-right">
-         <div className="workspace-button" onMouseDown={handlePaintButtonClick} title="Paint Group Box">
+         <div className="workspace-button" onMouseDown={handlePaintButtonClick} onTouchStart={handlePaintButtonClick} title="Paint Group Box">
             <img src="paint.svg" alt="Paint Box" />
         </div>
-        <div className="workspace-button" onMouseDown={onClearCanvasRequest} title="Clear Canvas">
+        <div className="workspace-button" onMouseDown={onClearCanvasRequest} onTouchStart={onClearCanvasRequest} title="Clear Canvas">
             <img src="clear.svg" alt="Clear Canvas" />
         </div>
       </div>

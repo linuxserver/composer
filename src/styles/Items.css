@@ -6,6 +6,7 @@
   border-radius: 8px;
   user-select: none;
   background-color: #4a5568;
+  position: relative;
 }
 
 .workspace-item-content.selected {
@@ -15,6 +16,32 @@
 .color-box-wrapper.selected {
   outline: 2px solid var(--box-color, #63b3ed);
   box-shadow: 0 0 8px var(--box-color, #63b3ed);
+}
+
+.delete-item-btn {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  width: 24px;
+  height: 24px;
+  background-color: #e53e3e;
+  color: white;
+  border: 2px solid #2d3748;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: bold;
+  line-height: 1;
+  z-index: 10;
+  padding: 0;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.delete-item-btn:hover {
+  background-color: #c53030;
 }
 
 .item-header {
@@ -140,8 +167,9 @@
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  z-index: 1;
+  z-index: 2;
   transition: transform 0.1s ease-in-out;
+  pointer-events: all;
 }
 
 .connector:hover {
@@ -151,6 +179,7 @@
 .connector-label {
   font-size: 0.8em;
   white-space: nowrap;
+  pointer-events: none;
 }
 
 .connectors-column.inputs .connector-wrapper {
