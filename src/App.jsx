@@ -4,7 +4,7 @@ import Workspace from './components/Workspace';
 import ConfirmationModal from './components/ConfirmationModal';
 import ComposeModal from './components/ComposeModal';
 import LsioModal from './components/LsioModal';
-import AddContainerModal from './components/AddContainerModal'; // Import the new modal
+import AddContainerModal from './components/AddContainerModal';
 import './styles/App.css';
 import yaml from 'js-yaml';
 import { ItemComponent as ContainerItemComponent, createContainerDefinition } from './components/items/Container.jsx';
@@ -78,6 +78,11 @@ function App() {
   const [isLsioModalOpen, setIsLsioModalOpen] = useState(false);
   const [isAddContainerModalOpen, setIsAddContainerModalOpen] = useState(false);
   const [composeFileContent, setComposeFileContent] = useState('');
+  const [isUrlLoadConfirmOpen, setIsUrlLoadConfirmOpen] = useState(false);
+  const [pendingUrlTemplate, setPendingUrlTemplate] = useState(null);
+  const [isUploadConfirmOpen, setIsUploadConfirmOpen] = useState(false);
+  const [pendingFile, setPendingFile] = useState(null);
+
   const workspaceContainerRef = useRef(null);
   const originalItemsRef = useRef([]);
   const saveTimeoutRef = useRef(null);
@@ -90,28 +95,109 @@ function App() {
     setIsLsioModalOpen(prev => !prev);
   };
 
+  const loadStateFromText = useCallback((fileContent) => {
+    const lines = fileContent.split('\n');
+    let lastLine = '';
+    for (let i = lines.length - 1; i >= 0; i--) {
+        if (lines[i].trim() !== '') {
+            lastLine = lines[i].trim();
+            break;
+        }
+    }
+    if (lastLine.startsWith('# LSIO_COMPOSER_DATA::')) {
+        try {
+            const base64String = lastLine.substring('# LSIO_COMPOSER_DATA::'.length);
+            const jsonString = decodeURIComponent(escape(atob(base64String)));
+            const sessionData = JSON.parse(jsonString);
+            if (sessionData.items && sessionData.connections && sessionData.transform) {
+                setWorkspaceItems(sessionData.items);
+                setConnections(sessionData.connections);
+                setTransform(sessionData.transform);
+                setSelectedElement(null);
+            } else {
+                alert('Error: The composer data in the file is malformed.');
+            }
+        } catch (error) {
+            console.error('Failed to parse composer data from file:', error);
+            alert('Error: Could not parse the composer data from the dropped file.');
+        }
+    } else {
+        alert('This does not appear to be a valid LSIO Composer file (missing metadata).');
+    }
+  }, []);
+
+  const loadFromUrl = useCallback(async (url) => {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Failed to fetch template: ${response.statusText}`);
+      const fileContent = await response.text();
+      loadStateFromText(fileContent);
+    } catch (error) {
+      console.error("Failed to load template from URL:", error);
+      alert(`Error loading template: ${error.message}`);
+    } finally {
+      setPendingUrlTemplate(null);
+      setIsUrlLoadConfirmOpen(false);
+    }
+  }, [loadStateFromText]);
+
+  const handleConfirmUrlLoad = useCallback(() => {
+    if (pendingUrlTemplate) {
+      loadFromUrl(pendingUrlTemplate);
+    }
+  }, [pendingUrlTemplate, loadFromUrl]);
+
+  const handleCancelUrlLoad = () => {
+    window.history.replaceState({}, document.title, "/");
+    setPendingUrlTemplate(null);
+    setIsUrlLoadConfirmOpen(false);
+  };
+
   useEffect(() => {
+    let sessionItems = [];
+    let sessionConnections = [];
+    let sessionTransform = { x: 0, y: 0, scale: 1 };
+    let isSessionLoaded = false;
+    
     try {
       const savedSession = localStorage.getItem(LOCAL_STORAGE_KEY);
       if (savedSession) {
         const sessionData = JSON.parse(savedSession);
         if (sessionData.items && sessionData.connections && sessionData.transform) {
           if (sessionData.items.every(item => item.definition)) {
-            setWorkspaceItems(sessionData.items);
-            setConnections(sessionData.connections);
-            setTransform(sessionData.transform);
-            return;
+            sessionItems = sessionData.items;
+            sessionConnections = sessionData.connections;
+            sessionTransform = sessionData.transform;
+            isSessionLoaded = true;
           }
         }
       }
     } catch (error) {
       console.error("Failed to load session from localStorage:", error);
     }
-    if (workspaceContainerRef.current) {
-      const rect = workspaceContainerRef.current.getBoundingClientRect();
-      setTransform({ x: rect.width / 2, y: rect.height / 2, scale: 1 });
+    
+    setWorkspaceItems(sessionItems);
+    setConnections(sessionConnections);
+    setTransform(sessionTransform);
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const github = urlParams.get('github');
+    
+    if (github) {
+      const rawUrl = `https://raw.githubusercontent.com/${github}`;
+      const isWorkspaceDirty = sessionItems.length > 0 || sessionConnections.length > 0;
+      
+      if (isWorkspaceDirty) {
+        setPendingUrlTemplate(rawUrl);
+        setIsUrlLoadConfirmOpen(true);
+      } else {
+        loadFromUrl(rawUrl);
+      }
+    } else if (!isSessionLoaded && workspaceContainerRef.current) {
+        const rect = workspaceContainerRef.current.getBoundingClientRect();
+        setTransform({ x: rect.width / 2, y: rect.height / 2, scale: 1 });
     }
-  }, []);
+  }, [loadFromUrl]);
 
   useEffect(() => {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -366,51 +452,46 @@ function App() {
     setIsComposeModalOpen(true);
   }, [workspaceItems, connections, transform]);
 
+  const loadFromFile = useCallback((file) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        loadStateFromText(event.target.result);
+    };
+    reader.readAsText(file);
+  }, [loadStateFromText]);
+
+  const handleUploadRequest = useCallback((file) => {
+    if (workspaceItems.length > 0 || connections.length > 0) {
+        setPendingFile(file);
+        setIsUploadConfirmOpen(true);
+    } else {
+        loadFromFile(file);
+    }
+  }, [workspaceItems, connections, loadFromFile]);
+
+  const handleConfirmUpload = () => {
+    if (pendingFile) {
+        loadFromFile(pendingFile);
+    }
+    setIsUploadConfirmOpen(false);
+    setPendingFile(null);
+  };
+
+  const handleCancelUpload = () => {
+    setIsUploadConfirmOpen(false);
+    setPendingFile(null);
+  };
+
   const handleFileDrop = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
     if (draggingItem) return;
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
         const file = e.dataTransfer.files[0];
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const fileContent = event.target.result;
-            const lines = fileContent.split('\n');
-            let lastLine = '';
-            for (let i = lines.length - 1; i >= 0; i--) {
-                if (lines[i].trim() !== '') {
-                    lastLine = lines[i].trim();
-                    break;
-                }
-            }
-            if (lastLine.startsWith('# LSIO_COMPOSER_DATA::')) {
-                try {
-                    const base64String = lastLine.substring('# LSIO_COMPOSER_DATA::'.length);
-                    const jsonString = decodeURIComponent(escape(atob(base64String)));
-                    const sessionData = JSON.parse(jsonString);
-                    if (sessionData.items && sessionData.connections && sessionData.transform) {
-                        if (workspaceItems.length > 0 && !window.confirm('This will clear your current workspace and load the new file. Are you sure?')) {
-                            return;
-                        }
-                        setWorkspaceItems(sessionData.items);
-                        setConnections(sessionData.connections);
-                        setTransform(sessionData.transform);
-                        setSelectedElement(null);
-                    } else {
-                        alert('Error: The composer data in the file is malformed.');
-                    }
-                } catch (error) {
-                    console.error('Failed to parse composer data from file:', error);
-                    alert('Error: Could not parse the composer data from the dropped file.');
-                }
-            } else {
-                alert('This does not appear to be a valid LSIO Composer file (missing metadata).');
-            }
-        };
-        reader.readAsText(file);
+        handleUploadRequest(file);
         e.dataTransfer.clearData();
     }
-  }, [workspaceItems, draggingItem]);
+  }, [draggingItem, handleUploadRequest]);
 
   useEffect(() => {
     const loadItems = async () => {
@@ -975,6 +1056,7 @@ function App() {
         onItemDataChange={handleItemDataChange}
         onClearCanvasRequest={handleClearCanvasRequest}
         onGenerateComposeRequest={generateComposeFile}
+        onUploadRequest={handleUploadRequest}
       />
       <ConfirmationModal
         isOpen={isClearModalOpen}
@@ -983,6 +1065,22 @@ function App() {
         title="Confirm Clear Canvas"
       >
         <p>Are you sure you want to clear the entire canvas? This action cannot be undone.</p>
+      </ConfirmationModal>
+      <ConfirmationModal
+        isOpen={isUrlLoadConfirmOpen}
+        onClose={handleCancelUrlLoad}
+        onConfirm={handleConfirmUrlLoad}
+        title="Load Template from URL"
+      >
+        <p>Loading this template will replace your current workspace. Are you sure you want to continue?</p>
+      </ConfirmationModal>
+      <ConfirmationModal
+        isOpen={isUploadConfirmOpen}
+        onClose={handleCancelUpload}
+        onConfirm={handleConfirmUpload}
+        title="Load Template from File"
+      >
+        <p>Loading this template will replace your current workspace. Are you sure you want to continue?</p>
       </ConfirmationModal>
       <ComposeModal
         isOpen={isComposeModalOpen}

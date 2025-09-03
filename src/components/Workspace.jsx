@@ -1,4 +1,4 @@
-import React, { useState, forwardRef, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, forwardRef, useMemo, useCallback, useEffect, useRef } from 'react';
 import WorkspaceItem from './WorkspaceItem';
 import ColorPicker from './ColorPicker';
 import '../styles/Workspace.css';
@@ -20,7 +20,7 @@ const calculatePath = (startPos, endPos) => {
 const Workspace = forwardRef(({
   items, setItems, connections, onConnectionMade, transform, onTransformChange, itemComponents,
   draggingItem, onDrop, onDragOver, onDragLeave, selectedElement, setSelectedElement, onItemDataChange,
-  onClearCanvasRequest, onGenerateComposeRequest
+  onClearCanvasRequest, onGenerateComposeRequest, onUploadRequest
 }, ref) => {
   const [interaction, setInteraction] = useState({ type: null, itemId: null });
   const [linking, setLinking] = useState(null);
@@ -28,6 +28,7 @@ const Workspace = forwardRef(({
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const [colorPickerPosition, setColorPickerPosition] = useState(null);
   const [paintingState, setPaintingState] = useState(null);
+  const fileInputRef = useRef(null);
 
   const getConnectorPosition = useCallback((itemId, connectorId) => {
     const element = document.getElementById(`${itemId}-${connectorId}`);
@@ -111,7 +112,7 @@ const Workspace = forwardRef(({
             x2: position.x + size.width,
             y2: position.y + size.height,
           },
-          data: { color, label: 'New Group' },
+          data: { color, label: 'New Group', notes: '' },
         };
         setItems(current => [...current, newItem]);
         setSelectedElement({ id: newItem.id, type: 'item' });
@@ -306,6 +307,19 @@ const Workspace = forwardRef(({
     setPaintingState({ color, size: boxSize, position: null });
   };
 
+  const handleUploadClick = (e) => {
+    e.stopPropagation();
+    fileInputRef.current.click();
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      onUploadRequest(file);
+    }
+    e.target.value = null;
+  };
+
   const renderDragGhost = () => {
     if (!draggingItem || !draggingItem.ghostPosition) return null;
     const { defaultSize, ghostPosition, name, icon } = draggingItem;
@@ -394,6 +408,9 @@ const Workspace = forwardRef(({
         {renderPaintGhost()}
       </div>
       <div className="workspace-buttons-top-right">
+        <div className="workspace-button" onMouseDown={handleUploadClick} title="Upload Compose Template">
+            <img src="upload.svg" alt="Upload Template" />
+        </div>
         <div className="workspace-button" onMouseDown={onGenerateComposeRequest} title="Generate Docker Compose">
             <img src="docker-logo.svg" alt="Generate Docker Compose" />
         </div>
@@ -407,6 +424,13 @@ const Workspace = forwardRef(({
         </div>
       </div>
       {isColorPickerOpen && <ColorPicker onSelectColor={handleColorSelected} position={colorPickerPosition} />}
+      <input
+        type="file"
+        ref={fileInputRef}
+        style={{ display: 'none' }}
+        onChange={handleFileChange}
+        accept=".yml,.yaml"
+      />
     </div>
   );
 });

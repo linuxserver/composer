@@ -1,9 +1,6 @@
 import React from 'react';
+import '../../styles/Items.css';
 
-/**
- * The definition for the Color Box item.
- * It is purely decorative and has no inputs or outputs.
- */
 export const itemDefinition = {
   name: 'Group Box',
   defaultSize: {
@@ -14,8 +11,20 @@ export const itemDefinition = {
   outputs: [],
 };
 
-/**
- * This item is rendered with special logic inside WorkspaceItem.jsx,
- * so a standard ItemComponent is not needed.
- */
-export const ItemComponent = () => null;
+export const ItemComponent = ({ itemData, onItemDataChange }) => {
+  const notes = itemData.data?.notes ?? '';
+  const handleChange = (e) => {
+    onItemDataChange(itemData.id, { ...itemData.data, notes: e.target.value });
+  };
+
+  return (
+    <textarea
+      className="color-box-notes-area"
+      value={notes}
+      onChange={handleChange}
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      placeholder="Add notes..."
+    />
+  );
+};

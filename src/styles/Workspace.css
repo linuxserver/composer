@@ -133,6 +133,10 @@
   height: 24px;
 }
 
+.workspace-button[title*="Upload"]:hover {
+  background-color: #38a169;
+}
+
 .workspace-button[title*="Clear"]:hover {
   background-color: #E53E3E;
 }

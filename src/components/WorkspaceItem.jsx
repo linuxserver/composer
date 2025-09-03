@@ -171,7 +171,8 @@ const WorkspaceItem = ({
       const b = parseInt(hex.slice(5, 7), 16);
       return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     };
-        const wrapperClass = `workspace-item color-box-wrapper ${isSelected ? 'selected' : ''}`;
+    const wrapperClass = `workspace-item color-box-wrapper ${isSelected ? 'selected' : ''}`;
+    const ColorBoxContent = itemComponents['ColorBox']?.ItemComponent;
 
     return (
       <div
@@ -198,6 +199,9 @@ const WorkspaceItem = ({
           }}
         >
           <EditableLabel item={item} onItemDataChange={onItemDataChange} />
+        </div>
+        <div className="color-box-content-wrapper">
+          {ColorBoxContent && <ColorBoxContent itemData={item} onItemDataChange={onItemDataChange} />}
         </div>
         <div
           className="resize-handle"
