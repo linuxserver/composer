@@ -20,7 +20,7 @@ const calculatePath = (startPos, endPos) => {
 const Workspace = forwardRef(({
   items, setItems, connections, onConnectionMade, transform, onTransformChange, itemComponents,
   draggingItem, setDraggingItem, onDrop, onDragOver, onDragLeave, selectedElement, setSelectedElement, onItemDataChange,
-  onClearCanvasRequest, onGenerateComposeRequest, onUploadRequest, onDeleteItem
+  onClearCanvasRequest, onGenerateComposeRequest, onUploadRequest, onDeleteItem, onItemMoveEnd
 }, ref) => {
   const [interaction, setInteraction] = useState({ type: null, itemId: null });
   const [linking, setLinking] = useState(null); // { from: { itemId, connectorId }, currentPos: {x, y} }
@@ -149,6 +149,7 @@ const Workspace = forwardRef(({
   }, [linking, ref, transform.scale, transform.x, transform.y]);
 
   const startPan = useCallback((e) => {
+    if (paintingState) return;
     // This check is now the main guard against panning while linking
     if (e.target.closest('.connector')) return;
     if (interaction.type) return;
@@ -194,7 +195,7 @@ const Workspace = forwardRef(({
       window.addEventListener('mousemove', doPan);
       window.addEventListener('mouseup', stopPan);
     }
-  }, [interaction.type, isColorPickerOpen, setSelectedElement, transform, onTransformChange]);
+  }, [interaction.type, isColorPickerOpen, setSelectedElement, transform, onTransformChange, paintingState]);
 
   const handleWheel = useCallback((e) => {
     const scrollableParent = e.target.closest('.scrollable');
@@ -247,6 +248,9 @@ const Workspace = forwardRef(({
 
     const stopInteraction = () => {
       stopCurrentInteraction.current = null;
+      if (type === 'move') {
+        onItemMoveEnd(itemId);
+      }
       setInteraction({ type: null, itemId: null });
       if (isTouchEvent) {
         window.removeEventListener('touchmove', doInteraction);
@@ -266,7 +270,7 @@ const Workspace = forwardRef(({
       window.addEventListener('mousemove', doInteraction);
       window.addEventListener('mouseup', stopInteraction);
     }
-  }, [items, setItems, transform.scale, setSelectedElement]);
+  }, [items, setItems, transform.scale, setSelectedElement, onItemMoveEnd]);
 
   const handleTouchStart = useCallback((e) => {
     if (e.target.closest('.connector')) return;
@@ -406,6 +410,47 @@ const Workspace = forwardRef(({
     e.target.value = null;
   };
 
+  // Effect to show ghost preview when painting
+  useEffect(() => {
+    if (!paintingState) return;
+
+    const handleMouseMove = (e) => {
+      if (!ref.current) return;
+      const rect = ref.current.getBoundingClientRect();
+      const x = (e.clientX - rect.left - transform.x) / transform.scale;
+      const y = (e.clientY - rect.top - transform.y) / transform.scale;
+      const snappedX = Math.round(x / GRID_SIZE) * GRID_SIZE;
+      const snappedY = Math.round(y / GRID_SIZE) * GRID_SIZE;
+      setPaintingState(prev => ({ ...prev, position: { x: snappedX, y: snappedY } }));
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, [paintingState, ref, transform]);
+
+  // Handler to place the ColorBox on click
+  const handleWorkspaceClick = (e) => {
+    if (paintingState && paintingState.position) {
+      const { color, size } = paintingState;
+      const { x: x1, y: y1 } = paintingState.position;
+      const x2 = x1 + size.width;
+      const y2 = y1 + size.height;
+
+      const newItem = {
+        id: `item_${Date.now()}`,
+        type: 'ColorBox',
+        definition: itemComponents['ColorBox'].definition,
+        coords: { x1, y1, x2, y2 },
+        data: { color, notes: '', label: 'New Group' },
+      };
+      
+      setItems(items => [...items, newItem]);
+      setPaintingState(null);
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
+
   const renderDragGhost = () => {
     if (!draggingItem || !draggingItem.ghostPosition) return null;
     const { defaultSize, ghostPosition, name, icon } = draggingItem;
@@ -458,6 +503,7 @@ const Workspace = forwardRef(({
       ref={ref}
       className="workspace"
       onMouseDown={startPan}
+      onClick={handleWorkspaceClick}
       onDrop={onDrop}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}

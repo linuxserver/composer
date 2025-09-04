@@ -13,7 +13,7 @@ const DraggableItem = ({ item, onDragStartItem, onTouchStartItem }) => (
   </div>
 );
 
-const Sidebar = ({ onDragStartItem, onTouchStartItem, itemDefinitions, isOpen, onToggleLsioModal, onOpenAddContainerModal }) => {
+const Sidebar = ({ onDragStartItem, onTouchStartItem, itemDefinitions, isOpen, onToggleLsioModal, onOpenAddContainerModal, onOpenAddOverrideGroupModal }) => {
 
   const overrides = [];
   const topLevel = [];
@@ -84,9 +84,12 @@ const Sidebar = ({ onDragStartItem, onTouchStartItem, itemDefinitions, isOpen, o
           </div>
         </details>
 
-        <details>
+        <details open>
           <summary>Settings Overrides</summary>
           <div className="sidebar-group">
+            <button className="sidebar-item add-container-button" onMouseDown={onOpenAddOverrideGroupModal}>
+              + Override Group
+            </button>
             {overrides.map(item => <DraggableItem key={item.id} item={item} onDragStartItem={onDragStartItem} onTouchStartItem={onTouchStartItem} />)}
           </div>
         </details>

@@ -315,3 +315,54 @@
   align-self: flex-start;
   margin-top: 4px;
 }
+
+/* --- Override Group Styles --- */
+.override-group-wrapper {
+    border: none;
+    box-shadow: none;
+    background: none;
+}
+.override-group-content {
+    background-color: rgba(102, 126, 170, 0.15);
+    border: 2px dashed #a0aec0;
+}
+.override-group-content.selected {
+    border-style: solid;
+    border-color: #63b3ed;
+    outline: none;
+}
+.override-group-content .item-header {
+    background-color: rgba(160, 174, 192, 0.3);
+}
+.override-group-content .item-body {
+    padding-top: 20px;
+}
+
+.override-group-content .item-connectors-bar {
+    position: absolute;
+    top: 30px;
+    left: 0;
+    right: 0;
+    width: 100%;
+    background-color: transparent;
+    border: none;
+    padding: 0;
+    z-index: 2;
+}
+.override-group-content .connectors-spacer {
+    pointer-events: none;
+}
+.override-group-content .connectors-column {
+    background-color: #3a4454cc;
+    padding: 8px 0;
+}
+.override-group-content .connectors-column.inputs {
+    border-right: 1px solid #2d3748;
+    border-bottom: 1px solid #2d3748;
+    border-radius: 0 0 8px 0;
+}
+.override-group-content .connectors-column.outputs {
+    border-left: 1px solid #2d3748;
+    border-bottom: 1px solid #2d3748;
+    border-radius: 0 0 0 8px;
+}

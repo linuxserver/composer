@@ -5,19 +5,40 @@ import ConfirmationModal from './components/ConfirmationModal';
 import ComposeModal from './components/ComposeModal';
 import LsioModal from './components/LsioModal';
 import AddContainerModal from './components/AddContainerModal';
+import AddOverrideGroupModal from './components/AddOverrideGroupModal';
 import './styles/App.css';
 import yaml from 'js-yaml';
 import { ItemComponent as ContainerItemComponent, createContainerDefinition } from './components/items/Container.jsx';
 import { getDynamicDefinition as getDynamicDefinitionForItem } from './components/WorkspaceItem.jsx';
 import { itemDefinition as ColorBoxDefinition, ItemComponent as ColorBoxItemComponent } from './components/items/ColorBox.jsx';
+import { itemDefinition as OverrideGroupDefinition, ItemComponent as OverrideGroupItemComponent } from './components/items/OverrideGroup.jsx';
+
 
 const itemModules = import.meta.glob('./components/items/*.jsx', { eager: true });
 const GRID_SIZE = 20;
 const API_URL = 'api-data.json';
 const LOCAL_STORAGE_KEY = 'lsio-composer-session';
 
-const getProviderOutputValue = (item, itemDef) => {
+const getProviderOutputValue = (item, itemDef, allItems = []) => {
   if (!item || !item.data || !itemDef) return null;
+
+  if (item.type === 'OverrideGroup') {
+    const group = item;
+    const children = allItems.filter(child => {
+        if (child.id === group.id || !child.definition?.inputs.some(i => i.id === 'depends_on')) return false;
+        const center_x = (child.coords.x1 + child.coords.x2) / 2;
+        const center_y = (child.coords.y1 + child.coords.y2) / 2;
+        return center_x > group.coords.x1 && center_x < group.coords.x2 && center_y > group.coords.y1 && center_y < group.coords.y2;
+    });
+
+    if (itemDef.outputs.some(o => o.id === 'out:service')) {
+        return children.map(c => c.data?.container_name || c.type);
+    }
+    if (itemDef.outputs.some(o => o.id === 'out:portmap')) {
+        return children.flatMap(c => c.data?.ports || []);
+    }
+    return null;
+  }
 
   switch (itemDef.name) {
     case 'Env Var':
@@ -55,7 +76,6 @@ const getProviderOutputValue = (item, itemDef) => {
         pass: item.data?.pass || 'changeme',
       };
     default:
-      // Check if it's a container by looking for a 'service' type output
       const isContainer = itemDef.outputs?.some(o => o.type === 'service');
       if (isContainer) {
         return item.data?.container_name || item.type;
@@ -77,6 +97,7 @@ function App() {
   const [isComposeModalOpen, setIsComposeModalOpen] = useState(false);
   const [isLsioModalOpen, setIsLsioModalOpen] = useState(false);
   const [isAddContainerModalOpen, setIsAddContainerModalOpen] = useState(false);
+  const [isAddOverrideGroupModalOpen, setIsAddOverrideGroupModalOpen] = useState(false);
   const [composeFileContent, setComposeFileContent] = useState('');
   const [isUrlLoadConfirmOpen, setIsUrlLoadConfirmOpen] = useState(false);
   const [pendingUrlTemplate, setPendingUrlTemplate] = useState(null);
@@ -190,6 +211,7 @@ function App() {
       const loadedData = {};
       for (const path in itemModules) {
         const module = itemModules[path];
+        if (!module.itemDefinition || !module.ItemComponent) continue;
         const componentName = path.split('/').pop().replace('.jsx', '');
         loadedData[componentName] = {
           definition: module.itemDefinition,
@@ -198,6 +220,7 @@ function App() {
       }
       
       loadedData['ColorBox'] = { definition: ColorBoxDefinition, ItemComponent: ColorBoxItemComponent };
+      loadedData['OverrideGroup'] = { definition: OverrideGroupDefinition, ItemComponent: OverrideGroupItemComponent };
       loadedData['Container'] = { definition: null, ItemComponent: ContainerItemComponent };
 
       try {
@@ -340,7 +363,149 @@ function App() {
     setIsClearModalOpen(false);
   }, []);
 
+  const getItemsWithGroupOverrides = useCallback((items, conns) => {
+    const groups = items.filter(i => i.type === 'OverrideGroup');
+    if (groups.length === 0) return items;
+
+    const getConnectedValue = (itemId, connectorId) => {
+        const conn = conns.find(c => c.to.itemId === itemId && c.to.connectorId === connectorId);
+        if (!conn) return undefined;
+        const sourceItem = items.find(i => i.id === conn.from.itemId);
+        return getProviderOutputValue(sourceItem, sourceItem.definition, items);
+    };
+    
+    const getConnectedValues = (itemId, connectorId) => {
+        const matchingConns = conns.filter(c => c.to.itemId === itemId && c.to.connectorId === connectorId);
+        return matchingConns.map(conn => {
+            const sourceItem = items.find(i => i.id === conn.from.itemId);
+            return getProviderOutputValue(sourceItem, sourceItem.definition, items);
+        }).filter(v => v !== undefined && v !== null);
+    };
+
+    const groupOverrides = new Map();
+    groups.forEach(group => {
+        const overrides = {};
+        const groupDef = getDynamicDefinitionForItem(group, group.definition);
+        groupDef.inputs.forEach(input => {
+            if (input.id.startsWith('in:env:')) {
+                const key = input.id.substring('in:env:'.length);
+                const value = getConnectedValue(group.id, input.id);
+                if (value !== undefined) {
+                    if (!overrides.environment) overrides.environment = {};
+                    overrides.environment[key] = value;
+                }
+            } else if (input.id.startsWith('in:volume:')) {
+                const path = input.id.substring('in:volume:'.length);
+                const value = getConnectedValue(group.id, input.id);
+                if (value !== undefined) {
+                    if (!overrides.volumes) overrides.volumes = {};
+                    overrides.volumes[path] = value;
+                }
+            } else if (input.id.startsWith('in:prop:')) {
+                const key = input.id.substring('in:prop:'.length);
+                const value = getConnectedValue(group.id, input.id);
+                if (value !== undefined) {
+                    if (!overrides.props) overrides.props = {};
+                    overrides.props[key] = value;
+                }
+            } else if (input.id.startsWith('in:')) {
+                const key = input.id.substring('in:'.length);
+                const values = getConnectedValues(group.id, input.id);
+                if (values.length > 0) {
+                     if (!overrides.arrays) overrides.arrays = {};
+                     overrides.arrays[key] = values;
+                }
+            }
+        });
+        groupOverrides.set(group.id, overrides);
+    });
+
+    const itemToGroupMap = new Map();
+    const containers = items.filter(i => i.definition?.inputs.some(inp => inp.id === 'depends_on'));
+    containers.forEach(container => {
+        const center_x = (container.coords.x1 + container.coords.x2) / 2;
+        const center_y = (container.coords.y1 + container.coords.y2) / 2;
+        const parentGroup = groups.find(g => center_x > g.coords.x1 && center_x < g.coords.x2 && center_y > g.coords.y1 && center_y < g.coords.y2);
+        if (parentGroup) {
+            itemToGroupMap.set(container.id, parentGroup.id);
+        }
+    });
+
+    return items.map(item => {
+        const groupId = itemToGroupMap.get(item.id);
+        if (!groupId) return item;
+
+        const overrides = groupOverrides.get(groupId);
+        if (!overrides) return item;
+
+        let newData = { ...item.data };
+        let dataChanged = false;
+
+        // Apply env overrides
+        if (overrides.environment) {
+            const newEnv = (newData.environment || []).map(env => {
+                if (overrides.environment.hasOwnProperty(env.key)) {
+                    return { ...env, value: overrides.environment[env.key] };
+                }
+                return env;
+            });
+            if (JSON.stringify(newData.environment) !== JSON.stringify(newEnv)) {
+                newData.environment = newEnv;
+                dataChanged = true;
+            }
+        }
+
+        // Apply volume overrides
+        if (overrides.volumes) {
+            const newVols = (newData.volumes || []).map(vol => {
+                const parts = vol.split(':');
+                const target = parts.length > 1 ? parts[1] : '';
+                if (target && overrides.volumes.hasOwnProperty(target)) {
+                    const basePath = overrides.volumes[target];
+                    const containerName = newData.container_name || item.type;
+                    const newSource = `${basePath}/${containerName}`.replace(/\/+/g, '/');
+                    return `${newSource}:${target}`;
+                }
+                return vol;
+            });
+            if (JSON.stringify(newData.volumes) !== JSON.stringify(newVols)) {
+                newData.volumes = newVols;
+                dataChanged = true;
+            }
+        }
+        
+        // Apply prop overrides
+        if(overrides.props) {
+            Object.entries(overrides.props).forEach(([key, value]) => {
+                if(newData[key] !== value) {
+                    newData[key] = value;
+                    dataChanged = true;
+                }
+            });
+        }
+        
+        // Apply array overrides
+        if (overrides.arrays) {
+            Object.entries(overrides.arrays).forEach(([key, values]) => {
+                const currentArray = newData[key] || [];
+                const newArray = [...new Set([...currentArray, ...values.flat()])];
+                if(JSON.stringify(currentArray) !== JSON.stringify(newArray)){
+                    newData[key] = newArray;
+                    dataChanged = true;
+                }
+            });
+        }
+
+
+        return dataChanged ? { ...item, data: newData } : item;
+    });
+  }, []);
+
+  const displayedItems = useMemo(() => getItemsWithGroupOverrides(workspaceItems, connections), [workspaceItems, connections, getItemsWithGroupOverrides]);
+
+
   const generateComposeFile = useCallback(() => {
+    const finalItems = getItemsWithGroupOverrides(workspaceItems, connections);
     const compose = { services: {}, networks: {}, volumes: {}, secrets: {}, configs: {} };
 
     const arrayToObject = (arr, keyName = 'key', valueName = 'value') => {
@@ -354,7 +519,7 @@ function App() {
     const cleanObject = (obj) => {
         if (obj === null || obj === undefined) return null;
         if (Array.isArray(obj)) {
-            const newArr = obj.map(cleanObject).filter(v => v !== null && v !== undefined);
+            const newArr = obj.map(cleanObject).filter(v => v !== null && v !== undefined && v !== '');
             return newArr.length > 0 ? newArr : null;
         }
         if (typeof obj === 'object') {
@@ -374,7 +539,7 @@ function App() {
         return obj;
     };
 
-    workspaceItems.forEach(item => {
+    finalItems.forEach(item => {
         const data = item.data || {};
         const type = item.type;
 
@@ -445,7 +610,7 @@ function App() {
         }
     });
 
-    workspaceItems.forEach(item => {
+    finalItems.forEach(item => {
         const itemDef = item.definition;
         const isContainer = itemDef?.inputs.some(i => i.id === 'depends_on');
         
@@ -500,6 +665,20 @@ function App() {
         const serviceName = item.data.container_name ? item.data.container_name.toLowerCase().replace(/[^a-zA-Z0-9_.-]/g, '') : item.type.toLowerCase().replace(/[^a-zA-Z0-9_.-]/g, '');
         if (!serviceName) return;
         let serviceConfig = JSON.parse(JSON.stringify(item.data));
+        
+        // Handle depends_on from OverrideGroup
+        const dependsOnConns = connections.filter(c => c.to.itemId === item.id && c.to.connectorId.includes('depends_on'));
+        dependsOnConns.forEach(conn => {
+            const sourceItem = finalItems.find(i => i.id === conn.from.itemId);
+            if (sourceItem && sourceItem.type === 'OverrideGroup') {
+                const dynamicDef = getDynamicDefinitionForItem(sourceItem, sourceItem.definition);
+                const groupChildrenNames = getProviderOutputValue(sourceItem, dynamicDef, finalItems);
+                if (groupChildrenNames && Array.isArray(groupChildrenNames)) {
+                    serviceConfig.depends_on = [...new Set([...(serviceConfig.depends_on || []), ...groupChildrenNames])];
+                }
+            }
+        });
+
 
         const internalKeys = ['linkedInputs', 'linkedNetworks', 'linkedSecrets', 'linkedConfigs', 'linkedDevices', 'linkedSecurityOpt', 'linkedDependsOn', '_originalPorts'];
         internalKeys.forEach(key => delete serviceConfig[key]);
@@ -545,7 +724,7 @@ function App() {
     
     setComposeFileContent(finalFileContent);
     setIsComposeModalOpen(true);
-  }, [workspaceItems, connections, transform]);
+  }, [workspaceItems, connections, transform, getItemsWithGroupOverrides]);
 
   const loadFromFile = useCallback((file) => {
     const reader = new FileReader();
@@ -598,10 +777,8 @@ function App() {
       const fromItem = itemsToUpdate.find(i => i.id === currentItemId);
       if (!fromItem) continue;
 
-      const originalFromItem = allOriginalItems.find(i => i.id === currentItemId);
       const fromItemDef = getDynamicDefinitionForItem(fromItem, fromItem.definition);
-      const incomingValue = getProviderOutputValue(fromItem, fromItemDef);
-      const oldValue = originalFromItem ? getProviderOutputValue(originalFromItem, fromItem.definition) : null;
+      const incomingValue = getProviderOutputValue(fromItem, fromItemDef, allOriginalItems);
   
       const downstreamConnections = currentConnections.filter(c => c.from.itemId === currentItemId);
   
@@ -614,21 +791,42 @@ function App() {
         let newToData = { ...originalToItem.data };
         let dataChanged = false;
         const toConnectorId = conn.to.connectorId;
-
+        
         if (conn.type === 'portmap' && toConnectorId === 'ports') {
             const allBridgeConnections = currentConnections.filter(c => c.to.itemId === toItemId && c.to.connectorId === 'ports');
             const allNewPorts = allBridgeConnections.flatMap(bridgeConn => {
-                const sourceContainer = itemsToUpdate.find(i => i.id === bridgeConn.from.itemId);
-                if (!sourceContainer?.data?.ports) return [];
-                return sourceContainer.data.ports.map(pStr => {
-                    const parts = pStr.split(':');
-                    const internalPort = parts.length > 1 ? parts[1] : parts[0];
-                    const externalPort = parts.length > 1 ? parts[0] : '';
-                    return {
-                        connectionId: bridgeConn.id,
-                        name: `${sourceContainer.data.container_name || sourceContainer.type}:${internalPort}`,
-                        mappedPort: externalPort === '' ? '' : parseInt(externalPort, 10),
-                    };
+                const sourceItem = itemsToUpdate.find(i => i.id === bridgeConn.from.itemId);
+                if (!sourceItem) return [];
+        
+                let childContainers = [];
+                if (sourceItem.type === 'OverrideGroup') {
+                    childContainers = itemsToUpdate.filter(child => {
+                        if (child.id === sourceItem.id || !child.definition?.inputs.some(i => i.id === 'depends_on')) return false;
+                        const center_x = (child.coords.x1 + child.coords.x2) / 2;
+                        const center_y = (child.coords.y1 + child.coords.y2) / 2;
+                        return center_x > sourceItem.coords.x1 && center_x < sourceItem.coords.x2 && center_y > sourceItem.coords.y1 && center_y < sourceItem.coords.y2;
+                    });
+                } else {
+                    childContainers = [sourceItem];
+                }
+        
+                return childContainers.flatMap(container => {
+                    const sourcePorts = container.data?.ports;
+                    if (!sourcePorts || !Array.isArray(sourcePorts)) return [];
+        
+                    return sourcePorts.map(pStr => {
+                        const parts = pStr.split(':');
+                        const internalPort = parts.length > 1 ? parts[1] : parts[0];
+                        const externalPort = parts.length > 1 ? parts[0] : '';
+                        const uniquePortId = `${container.data.container_name || container.type}:${internalPort}`;
+                        const existingPortData = (originalToItem.data?.ports || []).find(p => p.name === uniquePortId);
+        
+                        return {
+                            connectionId: bridgeConn.id,
+                            name: uniquePortId,
+                            mappedPort: existingPortData ? existingPortData.mappedPort : (externalPort === '' ? '' : parseInt(externalPort, 10)),
+                        };
+                    });
                 });
             });
             if (JSON.stringify(newToData.ports || []) !== JSON.stringify(allNewPorts)) {
@@ -636,55 +834,99 @@ function App() {
                 dataChanged = true;
             }
         } else if (conn.type === 'service' && toConnectorId === 'services_in') {
-             const swagItem = originalToItem;
-             const connectedContainer = fromItem;
-             const serviceName = connectedContainer.data.container_name || connectedContainer.type;
-             const newConnectedServices = (swagItem.data.connectedServices || []).map(s => {
-                 if (s.connectionId === conn.id) {
-                     return { ...s, serviceName };
-                 }
-                 return s;
-             });
-             if (JSON.stringify(swagItem.data.connectedServices || []) !== JSON.stringify(newConnectedServices)) {
-                 newToData.connectedServices = newConnectedServices;
-                 dataChanged = true;
-             }
+            const swagItem = originalToItem;
+            if (fromItem.type === 'OverrideGroup') {
+                const group = fromItem;
+                const groupChildrenItems = allOriginalItems.filter(child => {
+                    if (child.id === group.id || !child.definition?.inputs.some(i => i.id === 'depends_on')) return false;
+                    const center_x = (child.coords.x1 + child.coords.x2) / 2;
+                    const center_y = (child.coords.y1 + child.coords.y2) / 2;
+                    return center_x > group.coords.x1 && center_x < group.coords.x2 && center_y > group.coords.y1 && center_y < group.coords.y2;
+                });
+        
+                const otherServices = (swagItem.data.connectedServices || []).filter(s => !s.connectionId.startsWith(`${conn.id}-`));
+                
+                const newServicesFromGroup = groupChildrenItems.map(childContainer => {
+                    const serviceName = childContainer.data.container_name || childContainer.type;
+                    const swagConfig = swagConfigs.find(c => c.name === serviceName.toLowerCase());
+                    let port = 80;
+                    const containerPorts = (childContainer.data._originalPorts || childContainer.data.ports || []);
+                    if (swagConfig) {
+                        port = swagConfig.port;
+                    } else if (containerPorts.length > 0) {
+                        const firstPort = containerPorts[0];
+                        const parts = firstPort.split(':');
+                        port = parts.length > 1 ? parseInt(parts[1], 10) : parseInt(parts[0], 10);
+                    }
+                    
+                    const uniqueId = `${conn.id}-${childContainer.id}`;
+                    const existingService = (swagItem.data.connectedServices || []).find(s => s.connectionId === uniqueId);
+    
+                    return {
+                        connectionId: uniqueId,
+                        serviceName: serviceName,
+                        port: existingService?.port ?? port,
+                        authProvider: existingService?.authProvider ?? 'none',
+                        config: swagConfig || { name: serviceName.toLowerCase() }
+                    };
+                });
+        
+                const finalServices = [...otherServices, ...newServicesFromGroup];
+                if (JSON.stringify(swagItem.data.connectedServices || []) !== JSON.stringify(finalServices)) {
+                    newToData.connectedServices = finalServices;
+                    dataChanged = true;
+                }
+            } else {
+                const connectedContainer = fromItem;
+                const serviceName = connectedContainer.data.container_name || connectedContainer.type;
+                const newConnectedServices = (swagItem.data.connectedServices || []).map(s => {
+                    if (s.connectionId === conn.id) {
+                        return { ...s, serviceName };
+                    }
+                    return s;
+                });
+                if (JSON.stringify(swagItem.data.connectedServices || []) !== JSON.stringify(newConnectedServices)) {
+                    newToData.connectedServices = newConnectedServices;
+                    dataChanged = true;
+                }
+            }
         } else if (conn.type === 'swag_auth' && toConnectorId === 'auth_in') {
             newToData.connectedAuth = (newToData.connectedAuth || []).map(auth =>
                 auth.connectionId === conn.id ? { ...auth, ...incomingValue } : auth
             );
             dataChanged = true;
-        } else if (toConnectorId.startsWith('prop:')) {
-            const propName = toConnectorId.substring('prop:'.length);
+        } else if (toConnectorId.startsWith('prop:') || toConnectorId.startsWith('in:prop:')) {
+            const propName = toConnectorId.substring(toConnectorId.lastIndexOf(':') + 1);
             if (newToData[propName] !== incomingValue) {
                 newToData[propName] = incomingValue;
                 dataChanged = true;
             }
-        } else if (toConnectorId === 'depends_on') {
-            newToData.depends_on = (newToData.depends_on || []).map(dep => dep === oldValue ? incomingValue : dep);
+        } else if (toConnectorId.includes('depends_on')) {
+            const newDeps = Array.isArray(incomingValue) ? incomingValue : [incomingValue];
+            newToData.depends_on = [...new Set([...(newToData.depends_on || []), ...newDeps])];
             dataChanged = true;
-        } else if (toConnectorId === 'networks_in') {
-            newToData.networks = (newToData.networks || []).map(n => n === oldValue ? incomingValue : n);
-            newToData.linkedNetworks = (newToData.linkedNetworks || []).map(n => n === oldValue ? incomingValue : n);
+        } else if (toConnectorId.includes('networks_in')) {
+            if (!(newToData.networks || []).includes(incomingValue)) newToData.networks = [...(newToData.networks || []), incomingValue];
+            newToData.linkedNetworks = [...(newToData.linkedNetworks || []), incomingValue];
             dataChanged = true;
-        } else if (toConnectorId === 'secrets_in') {
-            newToData.secrets = (newToData.secrets || []).map(s => s === oldValue ? incomingValue : s);
-            newToData.linkedSecrets = (newToData.linkedSecrets || []).map(s => s === oldValue ? incomingValue : s);
+        } else if (toConnectorId.includes('secrets_in')) {
+            if (!(newToData.secrets || []).includes(incomingValue)) newToData.secrets = [...(newToData.secrets || []), incomingValue];
+            newToData.linkedSecrets = [...(newToData.linkedSecrets || []), incomingValue];
             dataChanged = true;
-        } else if (toConnectorId === 'configs_in') {
-            newToData.configs = (newToData.configs || []).map(s => s === oldValue ? incomingValue : s);
-            newToData.linkedConfigs = (newToData.linkedConfigs || []).map(s => s === oldValue ? incomingValue : s);
+        } else if (toConnectorId.includes('configs_in')) {
+            if (!(newToData.configs || []).includes(incomingValue)) newToData.configs = [...(newToData.configs || []), incomingValue];
+            newToData.linkedConfigs = [...(newToData.linkedConfigs || []), incomingValue];
             dataChanged = true;
-        } else if (toConnectorId === 'devices_in') {
-            newToData.devices = (newToData.devices || []).map(d => d === oldValue ? incomingValue : d);
-            newToData.linkedDevices = (newToData.linkedDevices || []).map(d => d === oldValue ? incomingValue : d);
+        } else if (toConnectorId.includes('devices_in')) {
+            if (!(newToData.devices || []).includes(incomingValue)) newToData.devices = [...(newToData.devices || []), incomingValue];
+            newToData.linkedDevices = [...(newToData.linkedDevices || []), incomingValue];
             dataChanged = true;
-        } else if (toConnectorId === 'security_opt_in') {
-            newToData.security_opt = (newToData.security_opt || []).map(s => s === oldValue ? incomingValue : s);
-            newToData.linkedSecurityOpt = (newToData.linkedSecurityOpt || []).map(s => s === oldValue ? incomingValue : s);
+        } else if (toConnectorId.includes('security_opt_in')) {
+            if (!(newToData.security_opt || []).includes(incomingValue)) newToData.security_opt = [...(newToData.security_opt || []), incomingValue];
+            newToData.linkedSecurityOpt = [...(newToData.linkedSecurityOpt || []), incomingValue];
             dataChanged = true;
-        } else if (toConnectorId === 'labels_in') {
-            newToData.labels = (newToData.labels || []).map(l => l.connectionId === conn.id ? { ...incomingValue, connectionId: conn.id, isLinked: true } : l);
+        } else if (toConnectorId.includes('labels_in')) {
+            newToData.labels = [...(newToData.labels || []).filter(l=> l.connectionId !== conn.id), { ...incomingValue, connectionId: conn.id, isLinked: true }];
             dataChanged = true;
         } else if (toConnectorId.startsWith('volume:')) {
             const targetPath = toConnectorId.substring('volume:'.length);
@@ -699,7 +941,7 @@ function App() {
             });
         } else if (toConnectorId.startsWith('env:')) {
           const key = toConnectorId.substring('env:'.length);
-          const fromKey = conn.from.connectorId.substring('env_out:'.length);
+          const fromKey = conn.from.connectorId.substring(conn.from.connectorId.lastIndexOf(':') + 1);
           if (key === fromKey) {
             newToData.environment = (newToData.environment || []).map(env => {
                 if (env.key === key && env.value !== incomingValue) {
@@ -738,33 +980,46 @@ function App() {
             const oldPorts = itemToChange.data?.ports || [];
             const newPortsData = newData.ports || [];
             const changedPorts = newPortsData.filter(np => {
-                const op = oldPorts.find(p => p.connectionId === np.connectionId);
+                const op = oldPorts.find(p => p.name === np.name);
                 return op && op.mappedPort !== np.mappedPort;
             });
+        
             let containerIdsToPropagate = new Set();
+        
             changedPorts.forEach(changedPort => {
-                const connection = connections.find(c => c.id === changedPort.connectionId);
-                if (!connection) return;
-                const containerId = connection.from.itemId;
-                const containerIndex = itemsToUpdate.findIndex(i => i.id === containerId);
+                const nameParts = changedPort.name.split(':');
+                const containerName = nameParts[0];
+                const internalPort = nameParts[1];
+        
+                const containerIndex = itemsToUpdate.findIndex(item => 
+                    item.data?.container_name === containerName
+                );
+        
                 if (containerIndex === -1) return;
-                const internalPort = changedPort.name.split(':')[1];
+        
                 const container = itemsToUpdate[containerIndex];
                 const newContainerPorts = (container.data.ports || []).map(pStr => {
                     const parts = pStr.split(':');
                     const pInternal = parts.length > 1 ? parts[1] : parts[0];
-                    return pInternal === internalPort ? `${changedPort.mappedPort}:${pInternal}` : pStr;
+                    if (pInternal === internalPort) {
+                        return `${changedPort.mappedPort}:${pInternal}`;
+                    }
+                    return pStr;
                 });
+        
                 itemsToUpdate[containerIndex] = { ...container, data: { ...container.data, ports: newContainerPorts }};
-                containerIdsToPropagate.add(containerId);
+                containerIdsToPropagate.add(container.id);
             });
+        
             containerIdsToPropagate.forEach(cId => {
                 itemsToUpdate = propagateItemUpdate(cId, itemsToUpdate, connections, prevItems);
             });
+        
             const bridgeIndex = itemsToUpdate.findIndex(i => i.id === itemId);
             if (bridgeIndex > -1) {
                 itemsToUpdate[bridgeIndex] = { ...itemsToUpdate[bridgeIndex], data: { ...itemsToUpdate[bridgeIndex].data, ...newData }};
             }
+        
             return itemsToUpdate;
         }
 
@@ -788,7 +1043,7 @@ function App() {
     if (!fromConnector) return;
 
     const newConnection = {
-      id: `conn_${Date.now()}`,
+      id: `conn_${Date.now()}_${Math.random()}`,
       from: connection.from,
       to: connection.to,
       type: fromConnector.type,
@@ -806,68 +1061,114 @@ function App() {
         const originalToItem = updatedItems[toItemIndex];
         let newToData = { ...originalToItem.data };
         const toConnectorId = connection.to.connectorId;
-        const incomingValue = getProviderOutputValue(fromItem, fromItem.definition);
+        const incomingValue = getProviderOutputValue(fromItem, fromItemDef, prevItems);
 
         if (toItem.type === 'DuckdnsSwag' && toConnectorId === 'services_in') {
-            const fromItemIndex = updatedItems.findIndex(i => i.id === fromItem.id);
-            const containerToConnect = updatedItems[fromItemIndex];
-            
-            const originalPorts = containerToConnect.data.ports || [];
-            const storedOriginalPorts = containerToConnect.data._originalPorts || originalPorts;
-            const clearedContainerData = { ...containerToConnect.data, ports: [], _originalPorts: storedOriginalPorts };
-            updatedItems[fromItemIndex] = { ...containerToConnect, data: clearedContainerData };
-            
-            const serviceName = containerToConnect.data.container_name || containerToConnect.type;
-            const swagConfig = swagConfigs.find(c => c.name === serviceName.toLowerCase());
-            let port;
-            if (swagConfig) {
-                port = swagConfig.port;
-            } else if (storedOriginalPorts.length > 0) {
-                const firstPort = storedOriginalPorts[0];
-                const parts = firstPort.split(':');
-                port = parts.length > 1 ? parseInt(parts[1], 10) : parseInt(parts[0], 10);
+            if (fromItem.type === 'OverrideGroup') {
+                const group = fromItem;
+                const children = prevItems.filter(child => {
+                    if (child.id === group.id || !child.definition?.inputs.some(i => i.id === 'depends_on')) return false;
+                    const center_x = (child.coords.x1 + child.coords.x2) / 2;
+                    const center_y = (child.coords.y1 + child.coords.y2) / 2;
+                    return center_x > group.coords.x1 && center_x < group.coords.x2 && center_y > group.coords.y1 && center_y < group.coords.y2;
+                });
+        
+                const newServices = children.map(childContainer => {
+                    const childIndex = updatedItems.findIndex(i => i.id === childContainer.id);
+                    if (childIndex > -1) {
+                        const originalPorts = childContainer.data.ports || [];
+                        const storedOriginalPorts = childContainer.data._originalPorts || originalPorts;
+                        const clearedContainerData = { ...childContainer.data, ports: [], _originalPorts: storedOriginalPorts };
+                        updatedItems[childIndex] = { ...childContainer, data: clearedContainerData };
+                    }
+        
+                    const serviceName = childContainer.data.container_name || childContainer.type;
+                    const swagConfig = swagConfigs.find(c => c.name === serviceName.toLowerCase());
+                    let port = 80;
+                    const containerPorts = (childContainer.data._originalPorts || childContainer.data.ports || []);
+                    if (swagConfig) {
+                        port = swagConfig.port;
+                    } else if (containerPorts.length > 0) {
+                        const firstPort = containerPorts[0];
+                        const parts = firstPort.split(':');
+                        port = parts.length > 1 ? parseInt(parts[1], 10) : parseInt(parts[0], 10);
+                    }
+                    
+                    return {
+                        connectionId: `${newConnection.id}-${childContainer.id}`,
+                        serviceName: serviceName,
+                        port: port,
+                        authProvider: 'none',
+                        config: swagConfig || { name: serviceName.toLowerCase() }
+                    };
+                });
+        
+                newToData = {
+                    ...newToData,
+                    connectedServices: [...(newToData.connectedServices || []), ...newServices]
+                };
             } else {
-                port = 80;
+                const fromItemIndex = updatedItems.findIndex(i => i.id === fromItem.id);
+                const containerToConnect = updatedItems[fromItemIndex];
+                
+                const originalPorts = containerToConnect.data.ports || [];
+                const storedOriginalPorts = containerToConnect.data._originalPorts || originalPorts;
+                const clearedContainerData = { ...containerToConnect.data, ports: [], _originalPorts: storedOriginalPorts };
+                updatedItems[fromItemIndex] = { ...containerToConnect, data: clearedContainerData };
+                
+                const serviceName = containerToConnect.data.container_name || containerToConnect.type;
+                const swagConfig = swagConfigs.find(c => c.name === serviceName.toLowerCase());
+                let port;
+                if (swagConfig) {
+                    port = swagConfig.port;
+                } else if (storedOriginalPorts.length > 0) {
+                    const firstPort = storedOriginalPorts[0];
+                    const parts = firstPort.split(':');
+                    port = parts.length > 1 ? parseInt(parts[1], 10) : parseInt(parts[0], 10);
+                } else {
+                    port = 80;
+                }
+                
+                const newService = {
+                    connectionId: newConnection.id,
+                    serviceName: serviceName,
+                    port: port,
+                    authProvider: 'none',
+                    config: swagConfig || { name: serviceName.toLowerCase() }
+                };
+                
+                newToData = {
+                    ...newToData,
+                    connectedServices: [...(newToData.connectedServices || []), newService]
+                };
             }
-            
-            const newService = {
-                connectionId: newConnection.id,
-                serviceName: serviceName,
-                port: port,
-                authProvider: 'none',
-                config: swagConfig || { name: serviceName.toLowerCase() }
-            };
-            
-            newToData = {
-                ...newToData,
-                connectedServices: [...(newToData.connectedServices || []), newService]
-            };
         } else if (toItem.type === 'DuckdnsSwag' && toConnectorId === 'auth_in') {
-            const authProviderData = getProviderOutputValue(fromItem, fromItemDef);
+            const authProviderData = getProviderOutputValue(fromItem, fromItemDef, prevItems);
             newToData.connectedAuth = [
                 ...(newToData.connectedAuth || []),
                 { connectionId: newConnection.id, ...authProviderData }
             ];
         } else {
             newToData.linkedInputs = { ...newToData.linkedInputs, [toConnectorId]: true };
-            if (toConnectorId === 'depends_on') {
-                newToData.depends_on = [...(newToData.depends_on || []), incomingValue];
-            } else if (toConnectorId === 'networks_in') {
+            if (toConnectorId.includes('depends_on')) {
+                 const newDeps = Array.isArray(incomingValue) ? incomingValue : [incomingValue];
+                 newToData.depends_on = [...new Set([...(newToData.depends_on || []), ...newDeps])];
+            } else if (toConnectorId.includes('networks_in')) {
                 if (!(newToData.networks || []).includes(incomingValue)) newToData.networks = [...(newToData.networks || []), incomingValue];
                 newToData.linkedNetworks = [...(newToData.linkedNetworks || []), incomingValue];
-            } else if (toConnectorId === 'secrets_in') {
+            } else if (toConnectorId.includes('secrets_in')) {
                 if (!(newToData.secrets || []).includes(incomingValue)) newToData.secrets = [...(newToData.secrets || []), incomingValue];
                 newToData.linkedSecrets = [...(newToData.linkedSecrets || []), incomingValue];
-            } else if (toConnectorId === 'configs_in') {
+            } else if (toConnectorId.includes('configs_in')) {
                 if (!(newToData.configs || []).includes(incomingValue)) newToData.configs = [...(newToData.configs || []), incomingValue];
                 newToData.linkedConfigs = [...(newToData.linkedConfigs || []), incomingValue];
-            } else if (toConnectorId === 'devices_in') {
+            } else if (toConnectorId.includes('devices_in')) {
                 if (!(newToData.devices || []).includes(incomingValue)) newToData.devices = [...(newToData.devices || []), incomingValue];
                 newToData.linkedDevices = [...(newToData.linkedDevices || []), incomingValue];
-            } else if (toConnectorId === 'security_opt_in') {
+            } else if (toConnectorId.includes('security_opt_in')) {
                 if (!(newToData.security_opt || []).includes(incomingValue)) newToData.security_opt = [...(newToData.security_opt || []), incomingValue];
                 newToData.linkedSecurityOpt = [...(newToData.linkedSecurityOpt || []), incomingValue];
-            } else if (toConnectorId === 'labels_in') {
+            } else if (toConnectorId.includes('labels_in')) {
                 newToData.labels = [...(newToData.labels || []), { ...incomingValue, connectionId: newConnection.id, isLinked: true }];
             }
         }
@@ -891,21 +1192,45 @@ function App() {
       let newToData = { ...originalToItem.data };
       const toConnectorId = connection.to.connectorId;
       
-      const valueToUnlink = getProviderOutputValue(fromItem, fromItem.definition);
+      const valueToUnlink = getProviderOutputValue(fromItem, fromItem.definition, prevItems);
 
       const newLinkedInputs = { ...newToData.linkedInputs };
       delete newLinkedInputs[toConnectorId];
       newToData.linkedInputs = newLinkedInputs;
       
       if (toItem.type === 'DuckdnsSwag' && toConnectorId === 'services_in') {
-          const fromItemIndex = itemsToUpdate.findIndex(i => i.id === fromItem.id);
-          const fromContainer = itemsToUpdate[fromItemIndex];
-          if (fromContainer.data._originalPorts) {
-              const restoredData = { ...fromContainer.data, ports: fromContainer.data._originalPorts };
-              delete restoredData._originalPorts;
-              itemsToUpdate[fromItemIndex] = { ...fromContainer, data: restoredData };
+          if (fromItem.type === 'OverrideGroup') {
+              newToData.connectedServices = (newToData.connectedServices || []).filter(s => !s.connectionId.startsWith(`${connection.id}-`));
+              const group = fromItem;
+              const children = prevItems.filter(child => {
+                  if (child.id === group.id || !child.definition?.inputs.some(i => i.id === 'depends_on')) return false;
+                  const center_x = (child.coords.x1 + child.coords.x2) / 2;
+                  const center_y = (child.coords.y1 + child.coords.y2) / 2;
+                  return center_x > group.coords.x1 && center_x < group.coords.x2 && center_y > group.coords.y1 && center_y < group.coords.y2;
+              });
+              children.forEach(child => {
+                  const childIndex = itemsToUpdate.findIndex(i => i.id === child.id);
+                  if (childIndex > -1) {
+                      const childToUpdate = itemsToUpdate[childIndex];
+                      if (childToUpdate.data._originalPorts) {
+                          const restoredData = { ...childToUpdate.data, ports: childToUpdate.data._originalPorts };
+                          delete restoredData._originalPorts;
+                          itemsToUpdate[childIndex] = { ...childToUpdate, data: restoredData };
+                      }
+                  }
+              });
+          } else {
+              const fromItemIndex = itemsToUpdate.findIndex(i => i.id === fromItem.id);
+              if (fromItemIndex > -1) {
+                  const fromContainer = itemsToUpdate[fromItemIndex];
+                  if (fromContainer.data._originalPorts) {
+                      const restoredData = { ...fromContainer.data, ports: fromContainer.data._originalPorts };
+                      delete restoredData._originalPorts;
+                      itemsToUpdate[fromItemIndex] = { ...fromContainer, data: restoredData };
+                  }
+              }
+              newToData.connectedServices = (newToData.connectedServices || []).filter(s => s.connectionId !== connection.id);
           }
-          newToData.connectedServices = (newToData.connectedServices || []).filter(s => s.connectionId !== connection.id);
       } else if (toItem.type === 'DuckdnsSwag' && toConnectorId === 'auth_in') {
         const authProvider = (newToData.connectedAuth || []).find(a => a.connectionId === connection.id);
         if (authProvider) {
@@ -916,19 +1241,20 @@ function App() {
         newToData.connectedAuth = (newToData.connectedAuth || []).filter(a => a.connectionId !== connection.id);
       } else if (toConnectorId === 'ports' && connection.type === 'portmap') {
         newToData.ports = (newToData.ports || []).filter(p => p.connectionId !== connection.id);
-      } else if (toConnectorId === 'depends_on') {
-        newToData.depends_on = (newToData.depends_on || []).filter(dep => dep !== valueToUnlink);
-      } else if (toConnectorId === 'networks_in') {
+      } else if (toConnectorId.includes('depends_on')) {
+        const valuesToRemove = Array.isArray(valueToUnlink) ? valueToUnlink : [valueToUnlink];
+        newToData.depends_on = (newToData.depends_on || []).filter(dep => !valuesToRemove.includes(dep));
+      } else if (toConnectorId.includes('networks_in')) {
         newToData.linkedNetworks = (newToData.linkedNetworks || []).filter(n => n !== valueToUnlink);
-      } else if (toConnectorId === 'secrets_in') {
+      } else if (toConnectorId.includes('secrets_in')) {
         newToData.linkedSecrets = (newToData.linkedSecrets || []).filter(s => s !== valueToUnlink);
-      } else if (toConnectorId === 'configs_in') {
+      } else if (toConnectorId.includes('configs_in')) {
         newToData.linkedConfigs = (newToData.linkedConfigs || []).filter(c => c !== valueToUnlink);
-      } else if (toConnectorId === 'devices_in') {
+      } else if (toConnectorId.includes('devices_in')) {
         newToData.linkedDevices = (newToData.linkedDevices || []).filter(d => d !== valueToUnlink);
-      } else if (toConnectorId === 'security_opt_in') {
+      } else if (toConnectorId.includes('security_opt_in')) {
         newToData.linkedSecurityOpt = (newToData.linkedSecurityOpt || []).filter(s => s !== valueToUnlink);
-      } else if (toConnectorId === 'labels_in') {
+      } else if (toConnectorId.includes('labels_in')) {
         newToData.labels = (newToData.labels || []).filter(l => l.connectionId !== connection.id);
       } else if (toConnectorId === 'parentpath' && connection.type === 'mntpath') {
         newToData.parentPath = '';
@@ -1073,6 +1399,48 @@ function App() {
     setWorkspaceItems(items => [...items, newItem]);
     setIsAddContainerModalOpen(false);
   }, [workspaceItems, transform]);
+  
+  const handleAddOverrideGroup = useCallback(({ name, envVars, volumes, enabledInputs, enabledOutputs }) => {
+    const itemDefinition = loadedItemData['OverrideGroup'].definition;
+    const rect = workspaceContainerRef.current.getBoundingClientRect();
+    const x1 = (rect.width / 2 - (itemDefinition.defaultSize.width * GRID_SIZE) / 2 - transform.x) / transform.scale;
+    const y1 = (rect.height / 2 - (itemDefinition.defaultSize.height * GRID_SIZE) / 2 - transform.y) / transform.scale;
+    const x2 = x1 + itemDefinition.defaultSize.width * GRID_SIZE;
+    const y2 = y1 + itemDefinition.defaultSize.height * GRID_SIZE;
+
+    const newItem = {
+        id: `item_${Date.now()}`,
+        type: 'OverrideGroup',
+        definition: itemDefinition,
+        coords: { x1, y1, x2, y2 },
+        data: {
+            name,
+            envVars,
+            volumes,
+            enabledInputs,
+            enabledOutputs,
+        }
+    };
+    setWorkspaceItems(items => [...items, newItem]);
+    setIsAddOverrideGroupModalOpen(false);
+  }, [loadedItemData, transform]);
+
+  const handleItemMoveEnd = useCallback(() => {
+    setWorkspaceItems(prevItems => {
+        let itemsToUpdate = [...prevItems];
+        const groups = itemsToUpdate.filter(i => i.type === 'OverrideGroup');
+        
+        if (groups.length > 0) {
+            originalItemsRef.current = prevItems;
+            groups.forEach(group => {
+                itemsToUpdate = propagateItemUpdate(group.id, itemsToUpdate, connections, originalItemsRef.current);
+            });
+            return itemsToUpdate;
+        }
+        
+        return prevItems;
+    });
+  }, [connections, propagateItemUpdate]);
 
   const { sidebarItemDefinitions, lsioApps } = useMemo(() => {
     const sidebarItems = {};
@@ -1083,7 +1451,7 @@ function App() {
       const isContainer = itemDef.inputs?.some(i => i.id === 'depends_on');
       if (isContainer) {
         lsioItems.push({ id: key, ...itemDef });
-      } else if (key !== 'ColorBox' && key !== 'Container') { 
+      } else if (key !== 'ColorBox' && key !== 'Container' && key !== 'OverrideGroup') { 
         sidebarItems[key] = loadedItemData[key];
       }
     });
@@ -1105,6 +1473,7 @@ function App() {
         isOpen={isSidebarOpen}
         onToggleLsioModal={toggleLsioModal}
         onOpenAddContainerModal={() => setIsAddContainerModalOpen(true)}
+        onOpenAddOverrideGroupModal={() => setIsAddOverrideGroupModalOpen(true)}
       />
       <button
         className="sidebar-toggle"
@@ -1114,7 +1483,7 @@ function App() {
       />
       <Workspace
         ref={workspaceContainerRef}
-        items={workspaceItems}
+        items={displayedItems}
         setItems={setWorkspaceItems}
         connections={connections}
         onConnectionMade={handleConnectionMade}
@@ -1133,6 +1502,7 @@ function App() {
         onGenerateComposeRequest={generateComposeFile}
         onUploadRequest={handleUploadRequest}
         onDeleteItem={handleDeleteItem}
+        onItemMoveEnd={handleItemMoveEnd}
       />
       <ConfirmationModal
         isOpen={isClearModalOpen}
@@ -1174,6 +1544,11 @@ function App() {
         isOpen={isAddContainerModalOpen}
         onClose={() => setIsAddContainerModalOpen(false)}
         onConfirm={handleAddCustomContainer}
+      />
+      <AddOverrideGroupModal
+        isOpen={isAddOverrideGroupModalOpen}
+        onClose={() => setIsAddOverrideGroupModalOpen(false)}
+        onConfirm={handleAddOverrideGroup}
       />
     </div>
   );

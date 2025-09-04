@@ -17,6 +17,40 @@ export const getDynamicDefinition = (item, staticDefinition) => {
         return { ...staticDefinition, outputs: [{ id: 'env_out_placeholder', name: 'Set Key', type: 'env_value', color: '#a0aec0' }] };
     }
     
+    if (item.type === 'OverrideGroup') {
+        const dynamicInputs = [];
+        const dynamicOutputs = [];
+        const data = item.data || {};
+        const enabledInputs = data.enabledInputs || [];
+        const enabledOutputs = data.enabledOutputs || [];
+
+        (data.envVars || []).forEach(key => {
+            dynamicInputs.push({ id: `in:env:${key}`, name: key, compatibleTypes: ['mntpath', 'env_value'], multiple: false, color: '#f6ad55' });
+        });
+        (data.volumes || []).forEach(path => {
+            dynamicInputs.push({ id: `in:volume:${path}`, name: `vol: ${path.length > 12 ? `...${path.slice(-9)}` : path}`, compatibleTypes: ['mntpath'], multiple: false, color: '#ecc94b' });
+        });
+
+        // Conditionally add standard inputs based on checkboxes
+        if (enabledInputs.includes('Depends On')) dynamicInputs.push({ id: 'in:depends_on', name: 'Depends On', compatibleTypes: ['service'], multiple: true, color: '#63b3ed' });
+        if (enabledInputs.includes('Labels')) dynamicInputs.push({ id: 'in:labels', name: 'Labels', compatibleTypes: ['label'], multiple: true, color: '#a0aec0' });
+        if (enabledInputs.includes('Networks')) dynamicInputs.push({ id: 'in:networks', name: 'Networks', compatibleTypes: ['network'], multiple: true, color: '#48bb78' });
+        if (enabledInputs.includes('Secrets')) dynamicInputs.push({ id: 'in:secrets', name: 'Secrets', compatibleTypes: ['secret'], multiple: true, color: '#ed64a6' });
+        if (enabledInputs.includes('Configs')) dynamicInputs.push({ id: 'in:configs', name: 'Configs', compatibleTypes: ['config'], multiple: true, color: '#d69e2e' });
+        if (enabledInputs.includes('Devices')) dynamicInputs.push({ id: 'in:devices', name: 'Devices', compatibleTypes: ['mntpath'], multiple: true, color: '#667eea' });
+        if (enabledInputs.includes('Security Opts')) dynamicInputs.push({ id: 'in:security_opt', name: 'Security Opts', compatibleTypes: ['string_value'], multiple: true, color: '#718096' });
+        if (enabledInputs.includes('Restart')) dynamicInputs.push({ id: 'in:prop:restart', name: 'Restart', compatibleTypes: ['env_value'], multiple: false, color: '#4299e1' });
+        if (enabledInputs.includes('User')) dynamicInputs.push({ id: 'in:prop:user', name: 'User', compatibleTypes: ['env_value'], multiple: false, color: '#9f7aea' });
+        if (enabledInputs.includes('SHM Size')) dynamicInputs.push({ id: 'in:prop:shm_size', name: 'SHM Size', compatibleTypes: ['env_value'], multiple: false, color: '#38b2ac' });
+
+        // Conditionally add outputs
+        if (enabledOutputs.includes('Service')) dynamicOutputs.push({ id: 'out:service', name: 'Service', type: 'service', multiple: true, color: '#63b3ed' });
+        if (enabledOutputs.includes('Ports')) dynamicOutputs.push({ id: 'out:portmap', name: 'Ports', type: 'portmap', multiple: true, color: '#f56565' });
+
+
+        return { ...staticDefinition, name: data.name || 'Override Group', inputs: dynamicInputs, outputs: dynamicOutputs };
+    }
+
     const isContainer = staticDefinition.inputs.some(i => i.id === 'depends_on');
     const isSwag = item.type === 'DuckdnsSwag';
 
@@ -187,7 +221,7 @@ const WorkspaceItem = ({
       return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     };
     const wrapperClass = `workspace-item color-box-wrapper ${isSelected ? 'selected' : ''}`;
-    const ColorBoxContent = itemComponents['ColorBox']?.ItemComponent;
+    const ItemContentComponent = itemComponents['ColorBox']?.ItemComponent;
 
     return (
       <div
@@ -227,7 +261,7 @@ const WorkspaceItem = ({
           <EditableLabel item={item} onItemDataChange={onItemDataChange} />
         </div>
         <div className="color-box-content-wrapper">
-          {ColorBoxContent && <ColorBoxContent itemData={item} onItemDataChange={onItemDataChange} />}
+          {ItemContentComponent && <ItemContentComponent itemData={item} onItemDataChange={onItemDataChange} />}
         </div>
         <div
           className="resize-handle"
@@ -254,12 +288,23 @@ const WorkspaceItem = ({
 
   const definition = getDynamicDefinition(item, staticDefinition);
 
+  const itemStyle = {
+      left: `${x1}px`, 
+      top: `${y1}px`, 
+      width: `${width}px`, 
+      height: `${height}px`,
+  };
+
+  if (item.type === 'OverrideGroup') {
+      itemStyle.zIndex = 0;
+  }
+
   return (
     <div
-      className="workspace-item"
-      style={{ left: `${x1}px`, top: `${y1}px`, width: `${width}px`, height: `${height}px` }}
+      className={`workspace-item ${item.type === 'OverrideGroup' ? 'override-group-wrapper' : ''}`}
+      style={itemStyle}
     >
-      <div className={`workspace-item-content ${isSelected ? 'selected' : ''}`}>
+      <div className={`workspace-item-content ${isSelected ? 'selected' : ''} ${item.type === 'OverrideGroup' ? 'override-group-content' : ''}`}>
         {isSelected && (
           <button
             className="delete-item-btn"

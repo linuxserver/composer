@@ -52,10 +52,10 @@ export const ItemComponent = ({ itemData, onItemDataChange }) => {
   // --- End Validation Logic ---
 
   // Handles changes to any port input field.
-  const handlePortChange = (connectionId, newValue) => {
+  const handlePortChange = (portNameToChange, newValue) => {
     // Create a new array with the updated port value, ensuring immutability.
-    const newPorts = ports.map(port => 
-      port.connectionId === connectionId 
+    const newPorts = ports.map(port =>
+      port.name === portNameToChange
         ? { ...port, mappedPort: newValue === '' ? '' : parseInt(newValue, 10) }
         : port
     );
@@ -87,7 +87,7 @@ export const ItemComponent = ({ itemData, onItemDataChange }) => {
                 id={`port-${port.connectionId}-${port.name}`}
                 type="number"
                 value={port.mappedPort}
-                onChange={(e) => handlePortChange(port.connectionId, e.target.value)}
+                onChange={(e) => handlePortChange(port.name, e.target.value)}
                 onClick={(e) => e.stopPropagation()}
                 style={inputStyle}
               />
