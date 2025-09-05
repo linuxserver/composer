@@ -84,7 +84,7 @@ const Sidebar = ({ onDragStartItem, onTouchStartItem, itemDefinitions, isOpen, o
           </div>
         </details>
 
-        <details open>
+        <details>
           <summary>Settings Overrides</summary>
           <div className="sidebar-group">
             <button className="sidebar-item add-container-button" onMouseDown={onOpenAddOverrideGroupModal}>
