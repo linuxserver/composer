@@ -843,6 +843,18 @@ function App() {
                     const center_y = (child.coords.y1 + child.coords.y2) / 2;
                     return center_x > group.coords.x1 && center_x < group.coords.x2 && center_y > group.coords.y1 && center_y < group.coords.y2;
                 });
+
+                groupChildrenItems.forEach(childContainer => {
+                    const childIndex = itemsToUpdate.findIndex(i => i.id === childContainer.id);
+                    if (childIndex > -1) {
+                        const childToUpdate = itemsToUpdate[childIndex];
+                        if (childToUpdate.data._originalPorts === undefined) {
+                            const originalPorts = childToUpdate.data.ports || [];
+                            const clearedContainerData = { ...childToUpdate.data, ports: [], _originalPorts: originalPorts };
+                            itemsToUpdate[childIndex] = { ...childToUpdate, data: clearedContainerData };
+                        }
+                    }
+                });
         
                 const otherServices = (swagItem.data.connectedServices || []).filter(s => !s.connectionId.startsWith(`${conn.id}-`));
                 
@@ -1065,48 +1077,7 @@ function App() {
 
         if (toItem.type === 'DuckdnsSwag' && toConnectorId === 'services_in') {
             if (fromItem.type === 'OverrideGroup') {
-                const group = fromItem;
-                const children = prevItems.filter(child => {
-                    if (child.id === group.id || !child.definition?.inputs.some(i => i.id === 'depends_on')) return false;
-                    const center_x = (child.coords.x1 + child.coords.x2) / 2;
-                    const center_y = (child.coords.y1 + child.coords.y2) / 2;
-                    return center_x > group.coords.x1 && center_x < group.coords.x2 && center_y > group.coords.y1 && center_y < group.coords.y2;
-                });
-        
-                const newServices = children.map(childContainer => {
-                    const childIndex = updatedItems.findIndex(i => i.id === childContainer.id);
-                    if (childIndex > -1) {
-                        const originalPorts = childContainer.data.ports || [];
-                        const storedOriginalPorts = childContainer.data._originalPorts || originalPorts;
-                        const clearedContainerData = { ...childContainer.data, ports: [], _originalPorts: storedOriginalPorts };
-                        updatedItems[childIndex] = { ...childContainer, data: clearedContainerData };
-                    }
-        
-                    const serviceName = childContainer.data.container_name || childContainer.type;
-                    const swagConfig = swagConfigs.find(c => c.name === serviceName.toLowerCase());
-                    let port = 80;
-                    const containerPorts = (childContainer.data._originalPorts || childContainer.data.ports || []);
-                    if (swagConfig) {
-                        port = swagConfig.port;
-                    } else if (containerPorts.length > 0) {
-                        const firstPort = containerPorts[0];
-                        const parts = firstPort.split(':');
-                        port = parts.length > 1 ? parseInt(parts[1], 10) : parseInt(parts[0], 10);
-                    }
-                    
-                    return {
-                        connectionId: `${newConnection.id}-${childContainer.id}`,
-                        serviceName: serviceName,
-                        port: port,
-                        authProvider: 'none',
-                        config: swagConfig || { name: serviceName.toLowerCase() }
-                    };
-                });
-        
-                newToData = {
-                    ...newToData,
-                    connectedServices: [...(newToData.connectedServices || []), ...newServices]
-                };
+                // Pass
             } else {
                 const fromItemIndex = updatedItems.findIndex(i => i.id === fromItem.id);
                 const containerToConnect = updatedItems[fromItemIndex];
